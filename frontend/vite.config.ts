@@ -12,4 +12,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Render corre un proceso de Node normal, no Cloudflare Workers, así que
+  // fijamos el preset de Nitro a "node-server" (el build por defecto apunta
+  // a Cloudflare).
+  nitro: {
+    preset: "node-server",
+  },
 });
