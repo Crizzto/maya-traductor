@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
 import asyncio
@@ -215,32 +215,16 @@ async def api_traducir():
     return jsonify(resultado=resultado)
 
 
-@app.route("/", methods=["GET", "POST"])
-async def index():
-    resultado = ""
-    texto_original = ""
-    seleccion = "es-yua"
-
-    if request.method == "POST":
-        texto_original = request.form["texto"]
-        seleccion = request.form["idioma"]
-
-        if seleccion == "es-yua":
-            src, dest = "es", "yua"
-        elif seleccion == "yua-es":
-            src, dest = "yua", "es"
-        else:
-            src = dest = None
-
-        if src is None:
-            resultado = "Selección de idioma inválida."
-        elif not texto_original.strip():
-            resultado = "Escribe algo para traducir."
-        else:
-            resultado = await traducir_con_respaldo(texto_original, src, dest)
-
-    return render_template(
-        "index.html", resultado=resultado, texto=texto_original, seleccion=seleccion
+@app.route("/", methods=["GET"])
+def estado():
+    """
+    La interfaz de verdad ahora es la app de React (frontend/), que corre
+    por separado. Esta ruta solo sirve para confirmar que el backend está
+    vivo si entras a su URL directamente.
+    """
+    return jsonify(
+        estado="ok",
+        mensaje="Backend del Traductor Maya funcionando. Usa /api/traducir (POST).",
     )
 
 
