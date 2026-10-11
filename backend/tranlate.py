@@ -4,6 +4,7 @@ from asgiref.wsgi import WsgiToAsgi
 import asyncio
 import json
 import logging
+import os
 import re
 import requests
 from pathlib import Path
@@ -85,6 +86,48 @@ def normalizar(texto: str) -> str:
     return re.sub(r"['‘’ʻ]", "'", texto)
 
 
+# --- Azure Translator (motor principal) ---
+# Lee la clave y región desde variables de entorno; nunca las escribas
+# directo en el código. En local puedes definirlas antes de correr la
+# app, y en Render se ponen en Environment del servicio del backend.
+AZURE_KEY = os.environ.get("AZURE_TRANSLATOR_KEY", "")
+AZURE_REGION = os.environ.get("AZURE_TRANSLATOR_REGION", "")
+AZURE_ENDPOINT = "https://api.cognitive.microsofttranslator.com/translate"
+
+
+def azure_translate(texto: str, src: str, dest: str) -> str:
+    """
+    Traduce usando Azure Translator (API oficial, autenticada con clave).
+    A diferencia del scraping de Google, esto SÍ funciona bien desde
+    servidores en la nube como Render, porque es tráfico autorizado,
+    no scraping.
+    """
+    if not AZURE_KEY or not AZURE_REGION:
+        raise RuntimeError(
+            "Faltan las variables de entorno AZURE_TRANSLATOR_KEY / "
+            "AZURE_TRANSLATOR_REGION."
+        )
+
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_KEY,
+        "Ocp-Apim-Subscription-Region": AZURE_REGION,
+        "Content-Type": "application/json",
+    }
+    params = {"api-version": "3.0", "from": src, "to": dest}
+    cuerpo = [{"Text": texto}]
+
+    resp = requests.post(
+        AZURE_ENDPOINT, params=params, headers=headers, json=cuerpo, timeout=10
+    )
+    resp.raise_for_status()
+    datos = resp.json()
+    return datos[0]["translations"][0]["text"]
+
+
+# --- Google directo (respaldo opcional, último recurso) ---
+# Se deja como último intento por si Azure falla por cualquier motivo,
+# pero ten presente que desde un servidor en la nube Google suele
+# bloquearlo con 429 — no cuentes con que esto funcione en producción.
 HEADERS_NAVEGADOR = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -94,29 +137,13 @@ HEADERS_NAVEGADOR = {
     "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
     "Referer": "https://translate.google.com/",
 }
-
-# Sesión reutilizada entre peticiones: mantiene cookies como haría un
-# navegador real, en vez de abrir una conexión nueva y "anónima" cada vez.
 _sesion = requests.Session()
 _sesion.headers.update(HEADERS_NAVEGADOR)
 
 
 def google_translate_directo(texto: str, src: str, dest: str) -> str:
-    """
-    Le pega directo al endpoint público de Google Translate (el mismo que
-    usan googletrans y otras librerías por debajo), sin pasar por la lista
-    de idiomas restringida que trae deep-translator's GoogleTranslator.
-    Esto es necesario porque 'yua' no siempre aparece en esa lista fija,
-    aunque el servicio de Google sí lo traduce.
-    """
     url = "https://translate.googleapis.com/translate_a/single"
-    params = {
-        "client": "gtx",
-        "sl": src,
-        "tl": dest,
-        "dt": "t",
-        "q": texto,
-    }
+    params = {"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": texto}
     resp = _sesion.get(url, params=params, timeout=10)
     resp.raise_for_status()
     data = resp.json()
@@ -139,6 +166,7 @@ async def traducir_con_respaldo(texto: str, src: str, dest: str) -> str:
     diccionario = cargar_diccionario_local()
     entrada_local = diccionario.get((src, dest), {})
     if clave in entrada_local:
+        logger.info("[FUENTE: diccionario.json] %r -> %r", clave, entrada_local[clave])
         return entrada_local[clave]
 
     # 2) Diccionario colonial (glosario sacado del PDF de vocabularios
@@ -146,34 +174,40 @@ async def traducir_con_respaldo(texto: str, src: str, dest: str) -> str:
     # maya, distinta a la moderna.
     entrada_colonial = DICCIONARIO_COLONIAL.get((src, dest), {})
     if clave in entrada_colonial:
+        logger.info("[FUENTE: diccionario_colonial.json] %r -> %r", clave, entrada_colonial[clave])
         return f"{entrada_colonial[clave]} (fuente histórica, ortografía colonial)"
 
     # 3) Caché en memoria
     clave_cache = (src, dest, clave)
     if clave_cache in _cache_traducciones:
+        logger.info("[FUENTE: caché en memoria] %r", clave)
         return _cache_traducciones[clave_cache]
 
     texto_para_traducir = normalizar(texto)
 
-    # 4) Google Translate directo. Un solo intento: reintentar de inmediato
-    # varias veces solo empeora el límite de peticiones cuando ya nos
-    # topamos con un 429.
+    # 4) Azure Translator (motor principal en producción)
+    try:
+        resultado = await asyncio.to_thread(
+            azure_translate, texto_para_traducir, src, dest
+        )
+        if resultado:
+            logger.info("[FUENTE: Azure Translator] %r -> %r", texto_para_traducir, resultado)
+            _cache_traducciones[clave_cache] = resultado
+            return resultado
+    except Exception as e:
+        logger.warning("Azure Translator falló: %s", e)
+
+    # 5) Google directo, solo como último recurso (puede fallar en la nube)
     try:
         resultado = await asyncio.to_thread(
             google_translate_directo, texto_para_traducir, src, dest
         )
         if resultado:
+            logger.info("[FUENTE: Google (respaldo)] %r -> %r", texto_para_traducir, resultado)
             _cache_traducciones[clave_cache] = resultado
             return resultado
-    except requests.exceptions.HTTPError as e:
-        logger.warning("Google Translate falló: %s", e)
-        if getattr(e.response, "status_code", None) == 429:
-            return (
-                "Google está limitando las peticiones ahora mismo (error 429). "
-                "Espera unos minutos sin volver a intentar y prueba de nuevo."
-            )
     except Exception as e:
-        logger.warning("Google Translate falló: %s", e)
+        logger.warning("Google Translate (respaldo) falló: %s", e)
 
     return "No se pudo traducir en este momento. Intenta de nuevo más tarde."
 

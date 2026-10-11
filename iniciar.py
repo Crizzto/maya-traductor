@@ -27,7 +27,7 @@ RAIZ = Path(__file__).parent
 BACKEND = RAIZ / "backend"
 FRONTEND = RAIZ / "frontend"
 
-URL_FRONTEND = "http://localhost:3000"
+URL_FRONTEND = "http://localhost:8080"
 
 
 def comando_npm():
