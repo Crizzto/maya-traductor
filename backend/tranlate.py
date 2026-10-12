@@ -267,4 +267,6 @@ app = WsgiToAsgi(app)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("tranlate:app", host="127.0.0.1", port=8001, reload=True)
+    # 0.0.0.0 en vez de 127.0.0.1: así otros dispositivos en tu misma red
+    # (como tu celular) también pueden conectarse, no solo esta compu.
+    uvicorn.run("tranlate:app", host="0.0.0.0", port=8001, reload=True)
