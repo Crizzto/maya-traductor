@@ -1,6 +1,5 @@
 Flask==3.1.1
 Flask-Cors==5.0.0
-Flask-Executor==1.0.0
 asgiref==3.8.1
 uvicorn==0.34.2
 requests==2.32.3

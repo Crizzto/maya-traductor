@@ -1,8 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Flower2, Heart, History, Keyboard, Languages, Leaf, MapPin, MessageCircle, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Download, Flower2, Heart, Keyboard, Languages, MessageCircle, Pencil, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import mayaLandscape from '@/assets/maya-landscape.jpg';
+import { postJSON } from '@/lib/api';
+import { ChatSection } from '@/components/zacilingua/ChatSection';
+import { EtiquetaFuente, type Fuente } from '@/components/zacilingua/EtiquetaFuente';
+import { FormularioSugerencia } from '@/components/zacilingua/FormularioSugerencia';
+import { ModoConferencia } from '@/components/zacilingua/ModoConferencia';
 
 export const Route = createFileRoute('/')({
   head: () => ({
@@ -39,11 +44,6 @@ const mayaColors = [
   { name: 'Azul Maya', token: 'azul', meaning: 'Azul · lo sagrado, el cielo y el agua' },
 ];
 
-// En desarrollo, el backend Flask corre en 127.0.0.1:8001 (ver tranlate.py).
-// Si lo despliegas, pon la URL real aquí o mejor como variable de entorno
-// de Vite (import.meta.env.VITE_API_URL).
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001';
-
 function Index() {
   const [source, setSource] = useState<'maya' | 'spanish'>('maya');
   const [text, setText] = useState('');
@@ -51,8 +51,16 @@ function Index() {
   const [modal, setModal] = useState<'about' | 'history' | null>(null);
   const [notice, setNotice] = useState('');
   const [resultado, setResultado] = useState('');
+  const [fuente, setFuente] = useState<Fuente | null>(null);
+  // Sugerencias de corrección: el usuario propone la traducción correcta
+  // y queda pendiente de revisión (no cambia nada hasta que se aprueba).
+  const [traducido, setTraducido] = useState<{ original: string; direccion: string } | null>(null);
+  const [mostrarSugerencia, setMostrarSugerencia] = useState(false);
+  const [sugerenciaEnviada, setSugerenciaEnviada] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [procesandoFoto, setProcesandoFoto] = useState(false);
+  const [promptInstalacion, setPromptInstalacion] = useState<any>(null);
+  const [yaInstalada, setYaInstalada] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const entradaFoto = useRef<HTMLInputElement>(null);
   const isMaya = source === 'maya';
@@ -68,6 +76,24 @@ function Index() {
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [modal]);
+  useEffect(() => {
+    // Si ya está instalada (corriendo en modo app), no mostramos el botón.
+    if (window.matchMedia('(display-mode: standalone)').matches) setYaInstalada(true);
+
+    const capturarPrompt = (evento: Event) => {
+      evento.preventDefault();
+      setPromptInstalacion(evento);
+    };
+    window.addEventListener('beforeinstallprompt', capturarPrompt);
+
+    const marcarInstalada = () => { setYaInstalada(true); setPromptInstalacion(null); };
+    window.addEventListener('appinstalled', marcarInstalada);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', capturarPrompt);
+      window.removeEventListener('appinstalled', marcarInstalada);
+    };
+  }, []);
 
   function swap() {
     setSource(isMaya ? 'spanish' : 'maya');
@@ -140,17 +166,13 @@ function Index() {
     setCargando(true);
     setResultado('');
     try {
-      const respuesta = await fetch(`${API_URL}/api/traducir`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          texto: text,
-          direccion: isMaya ? 'maya-spanish' : 'spanish-maya',
-        }),
-      });
-      const datos = await respuesta.json();
-      if (!respuesta.ok) throw new Error(datos.error || 'Error al traducir.');
+      const datos = await postJSON<{ resultado: string; fuente: Fuente }>('/api/traducir', {
+        texto: text,
+        direccion: isMaya ? 'maya-spanish' : 'spanish-maya',
+      }, 'Error al traducir.');
       setResultado(datos.resultado);
+      setFuente(datos.fuente ?? null);
+      setTraducido({ original: text.trim(), direccion: isMaya ? 'maya-spanish' : 'spanish-maya' });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'No se pudo conectar con el traductor.');
     } finally {
@@ -158,10 +180,33 @@ function Index() {
     }
   }
 
+  // Si el resultado se borra (otro texto, cambio de idioma...), se cierra
+  // el formulario de sugerencia porque ya no corresponde.
+  useEffect(() => {
+    if (!resultado) { setMostrarSugerencia(false); setSugerenciaEnviada(false); }
+  }, [resultado]);
+
+  function abrirSugerencia() {
+    setMostrarSugerencia(true);
+  }
+
   async function copiarResultado() {
     if (!resultado) return;
     try { await navigator.clipboard.writeText(resultado); setNotice('Traducción copiada.'); }
     catch { setNotice('No se pudo copiar al portapapeles.'); }
+  }
+
+  async function instalarApp() {
+    if (promptInstalacion) {
+      promptInstalacion.prompt();
+      const eleccion = await promptInstalacion.userChoice;
+      if (eleccion.outcome === 'accepted') setYaInstalada(true);
+      setPromptInstalacion(null);
+    } else {
+      // iOS Safari (y algunos otros navegadores) no soportan este evento:
+      // no hay forma de disparar la instalación por código, solo explicar.
+      setNotice('En iPhone: toca el botón de compartir de Safari y elige "Añadir a pantalla de inicio".');
+    }
   }
 
   function pronunciarResultado() {
@@ -194,6 +239,7 @@ function Index() {
         <a href="#" aria-label="Zacilingua, inicio" className="flex items-center gap-2.5"><BrandMark className="brand-symbol" /><div><div className="brand-name">zacilingua<span className="text-primary">.</span></div><div className="brand-caption">PALABRAS QUE CONECTAN</div></div></a>
         <nav aria-label="Navegación principal" className="flex items-center gap-6 sm:gap-9">
           <Button variant="ghost" asChild className="nav-link active"><a href="#traductor">Traductor</a></Button>
+          {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="gap-1.5"><Download size={14} /> Descargar app</Button>}
           <span className="hidden items-center gap-1.5 border-l border-border pl-5 text-xs text-muted-foreground sm:flex"><Languages size={14} /> ES</span>
         </nav>
       </div>
@@ -226,15 +272,39 @@ function Index() {
           </div>
           <div className="result-panel" aria-live="polite">
             {resultado
-              ? <><p className="result-text">{resultado}</p>{!isMaya ? null : <small className="block text-[10px] text-muted-foreground mt-1">Pronunciación aproximada (no existe voz nativa en maya)</small>}</>
+              ? <><p className="result-text">{resultado}</p>{!isMaya ? null : <small className="block text-[10px] text-muted-foreground mt-1">Pronunciación aproximada (no existe voz nativa en maya)</small>}
+                {fuente && fuente !== 'error' && (
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
+                    <EtiquetaFuente fuente={fuente} />
+                    {sugerenciaEnviada
+                      ? <span style={{ fontSize: 12, color: '#1e5631', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> Sugerencia enviada</span>
+                      : !mostrarSugerencia && <button type="button" onClick={abrirSugerencia} style={{ fontSize: 12, fontWeight: 600, color: '#5b5648', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}><Pencil size={12} /> {fuente === 'verificado' ? '¿Ves un error?' : 'Sugerir corrección'}</button>}
+                  </div>
+                )}</>
               : <div className="result-empty"><BrandMark className="result-symbol" /><p>{cargando ? 'Traduciendo…' : 'Aquí comienza una nueva conexión'}</p><small>{cargando ? 'Un momento, por favor.' : 'Tu traducción aparecerá aquí.'}</small></div>
             }
             <div className="panel-controls"><span className="count">{isMaya ? 'ESPAÑOL' : 'MAYA YUCATECO'}</span><div className="flex items-center gap-1"><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={pronunciarResultado} title="Escuchar traducción" aria-label="Escuchar traducción"><Volume2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={compartirWhatsApp} title="Compartir por WhatsApp" aria-label="Compartir por WhatsApp"><Share2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={copiarResultado} title="Copiar traducción" aria-label="Copiar traducción"><Copy /></Button></div></div>
           </div>
         </div>
+        {mostrarSugerencia && traducido && (
+          <FormularioSugerencia
+            original={traducido.original}
+            direccion={traducido.direccion}
+            traduccionActual={resultado}
+            onCancelar={() => setMostrarSugerencia(false)}
+            onEnviada={() => { setMostrarSugerencia(false); setSugerenciaEnviada(true); }}
+            onNotice={setNotice}
+          />
+        )}
         {keyboardOpen && <div className="character-tray"><span>Caracteres</span>{['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', 'ʼ'].map(character => <Button key={character} variant="outline" size="sm" onClick={() => insertCharacter(character)} aria-label={`Insertar ${character}`}>{character}</Button>)}</div>}
         <div className="translator-bottom"><span className="ai-label"><Languages size={14} /> Maya yucateco <span className="hidden sm:inline">⇄</span> Español</span><Button className="translate-cta" disabled={!text.trim() || cargando} onClick={traducir}>{cargando ? <Sparkles className="animate-spin" /> : resultado ? <Check /> : <Sparkles />} {cargando ? 'Traduciendo…' : resultado ? 'Traducido' : 'Traducir texto'}{!cargando && !resultado && <ArrowRight />}</Button></div>
       </section>
+
+
+
+      <ModoConferencia onNotice={setNotice} />
+
+      <ChatSection />
 
       <section className="phrases-section" aria-labelledby="phrases-title">
         <div className="flex items-center justify-between"><h3 id="phrases-title" className="phrase-heading"><Sun size={16} /> Las pequeñas palabras nos acercan</h3><span className="hidden text-[10px] text-muted-foreground sm:block">UN POCO DE INSPIRACIÓN</span></div>

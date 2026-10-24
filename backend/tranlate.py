@@ -1,216 +1,60 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from asgiref.wsgi import WsgiToAsgi
+"""
+Servidor del Traductor Maya: crea la app de Flask y define los endpoints.
+La lógica vive en módulos aparte:
+
+  diccionarios.py  diccionario verificado, glosario colonial y búsqueda
+  motor.py         orden de traducción, Azure Translator y cupo mensual
+  agente.py        agente conversacional con Gemini y sus herramientas
+  voz.py           tokens temporales de Azure Speech
+  almacen.py       caché y consumo en SQLite (datos.db)
+  proteccion.py    límites de peticiones por IP
+"""
+
 import asyncio
 import json
 import logging
 import os
-import re
-import requests
+import threading
+import uuid
+from datetime import datetime
 from pathlib import Path
 
-app = Flask(__name__)
-# Habilita CORS solo para /api/*, que es lo que va a llamar el frontend
-# de React (corre en otro puerto durante desarrollo: localhost:3000 o
-# parecido). El resto del sitio (la ruta "/" con Jinja) no lo necesita.
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+import requests
+from asgiref.wsgi import WsgiToAsgi
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
 logging.basicConfig(level=logging.INFO)
+
+import almacen
+import proteccion
+from agente import GEMINI_LIMITE_DIARIO, MAX_MENSAJE_AGENTE, limpiar_historial, preguntar_al_agente
+from diccionarios import normalizar
+from motor import AZURE_LIMITE_MENSUAL, azure_detectar_idioma, traducir_con_fuente
+from voz import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, _emitir_token_voz
+
+app = Flask(__name__)
 logger = logging.getLogger("tranlate")
 
-# Caché simple en memoria: evita volver a pegarle a Google por una frase
-# que ya tradujiste antes (ayuda a no gastar tu cuota de peticiones y
-# reduce las probabilidades de que te bloqueen por 429).
-_cache_traducciones = {}
+# CORS: qué páginas web pueden llamar a este backend desde el navegador.
+# En local se permiten localhost y tu red (192.168.x.x) en cualquier
+# puerto. En producción define ORIGENES_PERMITIDOS con la URL de tu
+# frontend, por ejemplo: https://zacilingua.onrender.com (varias se
+# separan con comas). OJO: CORS solo frena a otras páginas web; a un
+# script directo lo frenan los límites de proteccion.py.
+_origenes_env = os.environ.get("ORIGENES_PERMITIDOS", "").strip()
+ORIGENES_PERMITIDOS = (
+    [o.strip().rstrip("/") for o in _origenes_env.split(",") if o.strip()]
+    if _origenes_env
+    else [r"http://localhost(:\d+)?", r"http://127\.0\.0\.1(:\d+)?", r"http://192\.168\.\d+\.\d+(:\d+)?"]
+)
+CORS(app, resources={r"/api/*": {"origins": ORIGENES_PERMITIDOS}})
+proteccion.instalar(app)
+almacen.inicializar()
 
-RUTA_DICCIONARIO = Path(__file__).parent / "diccionario.json"
-RUTA_DICCIONARIO_COLONIAL = Path(__file__).parent / "diccionario_colonial.json"
-
-
-def cargar_diccionario_local() -> dict:
-    """
-    Carga diccionario.json, que tiene esta forma:
-    {
-      "es-yua": { "palabra en español": "traducción en maya", ... },
-      "yua-es": { "palabra en maya": "traducción en español", ... }
-    }
-    Se recarga en cada llamada (barato porque el archivo es pequeño),
-    así puedes editar diccionario.json y ver los cambios sin reiniciar
-    el servidor.
-    """
-    try:
-        with open(RUTA_DICCIONARIO, encoding="utf-8") as f:
-            datos = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        logger.warning("No se pudo leer diccionario.json: %s", e)
-        return {}
-
-    # Normaliza claves "es-yua" -> tupla ("es", "yua"), y todo a minúsculas
-    resultado = {}
-    for direccion, entradas in datos.items():
-        src, dest = direccion.split("-")
-        resultado[(src, dest)] = {
-            k.strip().lower(): v for k, v in entradas.items()
-        }
-    return resultado
-
-
-def _cargar_diccionario_colonial_una_vez() -> dict:
-    """
-    Carga diccionario_colonial.json (el glosario sacado del PDF de
-    vocabularios coloniales). A diferencia de diccionario.json, este NO
-    se recarga en cada petición: es grande (~1.6 MB, ~39 mil entradas) y
-    no lo vas a estar editando a mano constantemente, así que se carga
-    una sola vez cuando arranca el servidor.
-    """
-    try:
-        with open(RUTA_DICCIONARIO_COLONIAL, encoding="utf-8") as f:
-            datos = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        logger.warning("No se pudo leer diccionario_colonial.json: %s", e)
-        return {}
-
-    resultado = {}
-    for direccion, entradas in datos.items():
-        src, dest = direccion.split("-")
-        resultado[(src, dest)] = {
-            k.strip().lower(): v for k, v in entradas.items()
-        }
-    return resultado
-
-
-DICCIONARIO_COLONIAL = _cargar_diccionario_colonial_una_vez()
-
-
-def normalizar(texto: str) -> str:
-    """Unifica los distintos caracteres de apóstrofe/saltillo a uno solo."""
-    return re.sub(r"['‘’ʻ]", "'", texto)
-
-
-# --- Azure Translator (motor principal) ---
-# Lee la clave y región desde variables de entorno; nunca las escribas
-# directo en el código. En local puedes definirlas antes de correr la
-# app, y en Render se ponen en Environment del servicio del backend.
-AZURE_KEY = os.environ.get("AZURE_TRANSLATOR_KEY", "")
-AZURE_REGION = os.environ.get("AZURE_TRANSLATOR_REGION", "")
-AZURE_ENDPOINT = "https://api.cognitive.microsofttranslator.com/translate"
-
-
-def azure_translate(texto: str, src: str, dest: str) -> str:
-    """
-    Traduce usando Azure Translator (API oficial, autenticada con clave).
-    A diferencia del scraping de Google, esto SÍ funciona bien desde
-    servidores en la nube como Render, porque es tráfico autorizado,
-    no scraping.
-    """
-    if not AZURE_KEY or not AZURE_REGION:
-        raise RuntimeError(
-            "Faltan las variables de entorno AZURE_TRANSLATOR_KEY / "
-            "AZURE_TRANSLATOR_REGION."
-        )
-
-    headers = {
-        "Ocp-Apim-Subscription-Key": AZURE_KEY,
-        "Ocp-Apim-Subscription-Region": AZURE_REGION,
-        "Content-Type": "application/json",
-    }
-    params = {"api-version": "3.0", "from": src, "to": dest}
-    cuerpo = [{"Text": texto}]
-
-    resp = requests.post(
-        AZURE_ENDPOINT, params=params, headers=headers, json=cuerpo, timeout=10
-    )
-    resp.raise_for_status()
-    datos = resp.json()
-    return datos[0]["translations"][0]["text"]
-
-
-# --- Google directo (respaldo opcional, último recurso) ---
-# Se deja como último intento por si Azure falla por cualquier motivo,
-# pero ten presente que desde un servidor en la nube Google suele
-# bloquearlo con 429 — no cuentes con que esto funcione en producción.
-HEADERS_NAVEGADOR = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "*/*",
-    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
-    "Referer": "https://translate.google.com/",
-}
-_sesion = requests.Session()
-_sesion.headers.update(HEADERS_NAVEGADOR)
-
-
-def google_translate_directo(texto: str, src: str, dest: str) -> str:
-    url = "https://translate.googleapis.com/translate_a/single"
-    params = {"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": texto}
-    resp = _sesion.get(url, params=params, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    return "".join(fragmento[0] for fragmento in data[0] if fragmento[0])
-
-
-async def traducir_con_respaldo(texto: str, src: str, dest: str) -> str:
-    """
-    Intenta traducir en este orden:
-    1. Diccionario local (más confiable para yua).
-    2. Caché en memoria (evita repetir peticiones idénticas).
-    3. Google Translate directo, con reintentos y espera creciente si
-       Google responde 429 (límite de peticiones).
-    Si todo falla, regresa un mensaje claro en vez de tronar.
-    """
-    clave = normalizar(texto).strip().lower()
-
-    # 1) Diccionario local tuyo, verificado (se recarga cada vez para
-    # tomar ediciones nuevas al vuelo)
-    diccionario = cargar_diccionario_local()
-    entrada_local = diccionario.get((src, dest), {})
-    if clave in entrada_local:
-        logger.info("[FUENTE: diccionario.json] %r -> %r", clave, entrada_local[clave])
-        return entrada_local[clave]
-
-    # 2) Diccionario colonial (glosario sacado del PDF de vocabularios
-    # históricos). Se avisa la fuente porque usa ortografía antigua del
-    # maya, distinta a la moderna.
-    entrada_colonial = DICCIONARIO_COLONIAL.get((src, dest), {})
-    if clave in entrada_colonial:
-        logger.info("[FUENTE: diccionario_colonial.json] %r -> %r", clave, entrada_colonial[clave])
-        return f"{entrada_colonial[clave]} (fuente histórica, ortografía colonial)"
-
-    # 3) Caché en memoria
-    clave_cache = (src, dest, clave)
-    if clave_cache in _cache_traducciones:
-        logger.info("[FUENTE: caché en memoria] %r", clave)
-        return _cache_traducciones[clave_cache]
-
-    texto_para_traducir = normalizar(texto)
-
-    # 4) Azure Translator (motor principal en producción)
-    try:
-        resultado = await asyncio.to_thread(
-            azure_translate, texto_para_traducir, src, dest
-        )
-        if resultado:
-            logger.info("[FUENTE: Azure Translator] %r -> %r", texto_para_traducir, resultado)
-            _cache_traducciones[clave_cache] = resultado
-            return resultado
-    except Exception as e:
-        logger.warning("Azure Translator falló: %s", e)
-
-    # 5) Google directo, solo como último recurso (puede fallar en la nube)
-    try:
-        resultado = await asyncio.to_thread(
-            google_translate_directo, texto_para_traducir, src, dest
-        )
-        if resultado:
-            logger.info("[FUENTE: Google (respaldo)] %r -> %r", texto_para_traducir, resultado)
-            _cache_traducciones[clave_cache] = resultado
-            return resultado
-    except Exception as e:
-        logger.warning("Google Translate (respaldo) falló: %s", e)
-
-    return "No se pudo traducir en este momento. Intenta de nuevo más tarde."
-
+# Tamaños máximos aceptados, para que nadie mande textos gigantes.
+MAX_TEXTO_TRADUCIR = 5000
+MAX_TEXTO_CHAT = 1000
 
 def _resolver_direccion(valor: str):
     """
@@ -244,9 +88,151 @@ async def api_traducir():
         return jsonify(error="Dirección de traducción inválida."), 400
     if not texto:
         return jsonify(error="Escribe algo para traducir."), 400
+    if len(texto) > MAX_TEXTO_TRADUCIR:
+        return jsonify(error=f"El texto es demasiado largo (máximo {MAX_TEXTO_TRADUCIR:,} caracteres)."), 400
 
-    resultado = await traducir_con_respaldo(texto, src, dest)
-    return jsonify(resultado=resultado)
+    resultado, fuente = await traducir_con_fuente(texto, src, dest)
+    return jsonify(resultado=resultado, fuente=fuente)
+
+
+# --- Sugerencias de corrección ---
+# Los usuarios proponen traducciones correctas desde la app. Se guardan
+# como "pendientes" y NO cambian nada hasta que tú las apruebes con
+# revisar_sugerencias.py, que las pasa a diccionario.json.
+RUTA_SUGERENCIAS = Path(__file__).parent / "sugerencias_pendientes.json"
+_candado_sugerencias = threading.Lock()
+_MAX_TEXTO_SUGERENCIA = 500
+
+
+def leer_sugerencias() -> list:
+    try:
+        with open(RUTA_SUGERENCIAS, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def guardar_sugerencias(sugerencias: list) -> None:
+    temporal = RUTA_SUGERENCIAS.with_suffix(".tmp")
+    with open(temporal, "w", encoding="utf-8") as f:
+        json.dump(sugerencias, f, ensure_ascii=False, indent=2)
+    temporal.replace(RUTA_SUGERENCIAS)  # escritura atómica: no deja el archivo a medias
+
+
+@app.route("/api/sugerencias", methods=["POST"])
+async def api_sugerencias():
+    """
+    Recibe una corrección propuesta por un usuario. Espera:
+    { "original": "...", "traduccion_actual": "...", "sugerencia": "...",
+      "direccion": "spanish-maya" | "maya-spanish", "nota": "..." (opcional) }
+    """
+    datos = request.get_json(silent=True) or {}
+    original = (datos.get("original") or "").strip()
+    sugerencia = (datos.get("sugerencia") or "").strip()
+    actual = (datos.get("traduccion_actual") or "").strip()
+    nota = (datos.get("nota") or "").strip()
+    src, dest = _resolver_direccion(datos.get("direccion", ""))
+
+    if src is None:
+        return jsonify(error="Dirección de traducción inválida."), 400
+    if not original or not sugerencia:
+        return jsonify(error="Escribe la traducción que propones."), 400
+    if max(len(original), len(sugerencia), len(actual), len(nota)) > _MAX_TEXTO_SUGERENCIA:
+        return jsonify(error=f"El texto es demasiado largo (máximo {_MAX_TEXTO_SUGERENCIA} caracteres)."), 400
+    if normalizar(sugerencia).lower() == normalizar(actual).lower():
+        return jsonify(error="La sugerencia es igual a la traducción actual."), 400
+
+    nueva = {
+        "id": uuid.uuid4().hex[:10],
+        "fecha": datetime.now().isoformat(timespec="seconds"),
+        "direccion": f"{src}-{dest}",
+        "original": original,
+        "traduccion_actual": actual,
+        "sugerencia": sugerencia,
+        "nota": nota,
+    }
+    with _candado_sugerencias:
+        sugerencias = leer_sugerencias()
+        sugerencias.append(nueva)
+        guardar_sugerencias(sugerencias)
+    logger.info("[SUGERENCIA] %s %r: %r -> %r", nueva["direccion"], original, actual, sugerencia)
+    return jsonify(ok=True, id=nueva["id"])
+
+
+@app.route("/api/chat", methods=["POST"])
+async def api_chat():
+    """
+    Endpoint para la interfaz de chat: no pides dirección, detecta sola
+    el idioma del mensaje y traduce al otro. Espera: { "texto": "..." }.
+    Responde: { "resultado": "...", "idioma_detectado": "es" | "yua" }.
+    """
+    datos = request.get_json(silent=True) or {}
+    texto = (datos.get("texto") or "").strip()
+    if not texto:
+        return jsonify(error="Escribe algo para traducir."), 400
+    if len(texto) > MAX_TEXTO_CHAT:
+        return jsonify(error=f"El mensaje es demasiado largo (máximo {MAX_TEXTO_CHAT:,} caracteres)."), 400
+
+    try:
+        idioma_detectado = await asyncio.to_thread(azure_detectar_idioma, texto)
+    except Exception as e:
+        logger.warning("Detección de idioma falló, asumiendo español: %s", e)
+        idioma_detectado = "es"  # respaldo razonable si falla la detección
+
+    src, dest = ("es", "yua") if idioma_detectado == "es" else ("yua", "es")
+    resultado, fuente = await traducir_con_fuente(texto, src, dest)
+    return jsonify(resultado=resultado, fuente=fuente, idioma_detectado=idioma_detectado)
+
+
+@app.route("/api/agente", methods=["POST"])
+async def api_agente():
+    """
+    Endpoint del agente conversacional con Gemini. Espera:
+    { "mensaje": "...", "historial": [ {"role": "user"|"model", "parts": [{"text": "..."}]}, ... ] }
+    Responde: { "respuesta": "..." }
+    """
+    datos = request.get_json(silent=True) or {}
+    mensaje = (datos.get("mensaje") or "").strip()
+    if not mensaje:
+        return jsonify(error="Escribe algo primero."), 400
+    if len(mensaje) > MAX_MENSAJE_AGENTE:
+        return jsonify(error=f"El mensaje es demasiado largo (máximo {MAX_MENSAJE_AGENTE:,} caracteres)."), 400
+    historial = limpiar_historial(datos.get("historial"))
+
+    try:
+        respuesta = await preguntar_al_agente(mensaje, historial)
+    except RuntimeError as e:
+        # Incluye ErrorGemini: muestra el motivo real en el chat.
+        return jsonify(error=str(e)), 502
+    except Exception as e:
+        logger.exception("El agente falló: %s", e)
+        return jsonify(error="El agente no pudo responder en este momento."), 500
+
+    return jsonify(respuesta=respuesta)
+
+
+@app.route("/api/voz/token", methods=["GET"])
+async def api_voz_token():
+    """
+    Entrega un token temporal de Azure Speech para que el navegador haga
+    el reconocimiento de voz en vivo. Responde { "token", "region" }.
+    Si Azure Speech no está configurado responde 503, y el frontend usa
+    el reconocedor del navegador como respaldo.
+    """
+    if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+        return jsonify(error="Azure Speech no está configurado (faltan AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)."), 503
+    try:
+        token = await asyncio.to_thread(_emitir_token_voz)
+    except requests.HTTPError as e:
+        codigo = e.response.status_code if e.response is not None else "?"
+        logger.error("[VOZ] Azure Speech rechazó la petición de token (%s).", codigo)
+        mensaje = "Azure Speech rechazó la clave; revisa AZURE_SPEECH_KEY y AZURE_SPEECH_REGION." if codigo in (401, 403) else "Azure Speech no respondió bien."
+        return jsonify(error=mensaje), 502
+    except Exception as e:
+        logger.error("[VOZ] No se pudo obtener token de Azure Speech: %s", e)
+        return jsonify(error="No se pudo conectar con Azure Speech."), 502
+    almacen.uso_sumar("voz_sesiones", 1, almacen.dia_actual())
+    return jsonify(token=token, region=AZURE_SPEECH_REGION)
 
 
 @app.route("/", methods=["GET"])
@@ -259,6 +245,8 @@ def estado():
     return jsonify(
         estado="ok",
         mensaje="Backend del Traductor Maya funcionando. Usa /api/traducir (POST).",
+        uso=almacen.resumen_uso(),
+        limites={"azure_caracteres_mes": AZURE_LIMITE_MENSUAL, "gemini_peticiones_dia": GEMINI_LIMITE_DIARIO},
     )
 
 

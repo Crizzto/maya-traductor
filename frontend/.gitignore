@@ -43,3 +43,8 @@ frontend/.output/
 frontend/.wrangler/
 frontend/dist/
 *.log
+backend/datos.db
+backend/datos.db-*
+backend/sugerencias_pendientes.json
+backend/sugerencias_revisadas.json
+backend/*.tmp
