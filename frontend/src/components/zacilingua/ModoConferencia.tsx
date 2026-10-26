@@ -474,94 +474,92 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   }, []);
 
   return (
-      <section className="conference-section" aria-labelledby="conference-title" style={{ marginTop: 48, background: '#1a2e1f', color: '#f5f2ec', borderRadius: 24, padding: 'clamp(20px, 5vw, 40px)' }}>
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 24, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <h3 id="conference-title" style={{ fontSize: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Mic size={20} /> {t('Modo conferencia')}</h3>
-            <p style={{ fontSize: 15, color: '#c7c2b0', marginTop: 4, maxWidth: 520 }}>{t('Escucha lo que se dice en español y lo traduce a maya en voz alta, frase por frase. Útil para seguir una charla en vivo con audífonos.')}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-              <span style={{
-                width: 10, height: 10, borderRadius: 10,
-                background: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#6b7a6e',
-                animation: estadoMic !== 'apagado' ? 'pulso-mic 1.1s ease-in-out infinite' : 'none',
-              }} />
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#8a9488' }}>
-                {avisoInactividad !== null && !hablando ? `${t('SIN VOZ · se apagará en')} ${avisoInactividad} s` : hablando ? t('LEYENDO TRADUCCIÓN · micrófono en pausa') : estadoMic === 'detectando' ? t('¡DETECTANDO TU VOZ!') : estadoMic === 'escuchando' ? t('ESCUCHANDO · esperando que hables') : t('MICRÓFONO APAGADO')}
-              </span>
+    <section className="conference-section" aria-labelledby="conference-title" style={{ marginTop: 48, background: '#1a2e1f', color: '#f5f2ec', borderRadius: 24, padding: 'clamp(20px, 5vw, 40px)' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <h3 id="conference-title" style={{ fontSize: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Mic size={20} /> {t('Modo conferencia')}</h3>
+          <p style={{ fontSize: 15, color: '#c7c2b0', marginTop: 4, maxWidth: 520 }}>{t('Escucha lo que se dice en español y lo traduce a maya en voz alta, frase por frase. Útil para seguir una charla en vivo con audífonos.')}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: 10,
+              background: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#6b7a6e',
+              animation: estadoMic !== 'apagado' ? 'pulso-mic 1.1s ease-in-out infinite' : 'none',
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#8a9488' }}>
+              {avisoInactividad !== null && !hablando ? `${t('SIN VOZ · se apagará en')} ${avisoInactividad} s` : hablando ? t('LEYENDO TRADUCCIÓN · micrófono en pausa') : estadoMic === 'detectando' ? t('¡DETECTANDO TU VOZ!') : estadoMic === 'escuchando' ? t('ESCUCHANDO · esperando que hables') : t('MICRÓFONO APAGADO')}
+            </span>
+          </div>
+          <style>{`@keyframes pulso-mic { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.4); } }`}</style>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20 }}>
+            <Button onClick={escuchando ? detenerModoConferencia : iniciarModoConferencia} className="gap-2" variant={escuchando ? 'destructive' : 'default'}>
+              {escuchando ? <><MicOff size={16} /> {t('Detener')}</> : <><Mic size={16} /> {t('Empezar a escuchar')}</>}
+            </Button>
+            <Button onClick={cambiarLecturaEnVoz} className="gap-2" variant="outline" aria-pressed={leerEnVoz}
+              title={leerEnVoz ? t('Las traducciones se leen en voz alta') : t('Las traducciones solo se muestran en pantalla')}
+              style={{ background: 'transparent', color: '#f5f2ec', borderColor: 'rgba(245,242,236,0.3)' }}>
+              {leerEnVoz ? <><Volume2 size={16} /> {t('Voz activada')}</> : <><VolumeX size={16} /> {t('Voz apagada')}</>}
+            </Button>
+          </div>
+          {avisoInactividad !== null && !hablando && (
+            <Button onClick={seguirEscuchando} variant="outline" className="gap-2"
+              style={{ marginTop: 12, background: 'transparent', color: '#fb923c', borderColor: '#fb923c' }}>
+              <Mic size={16} /> {t('Sigo aquí, seguir escuchando')}
+            </Button>
+          )}
+          {escuchando && (
+            <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 12 }}>
+              {t('Tiempo de sesión')}: {minutos(segundosSesion)} / {minutos(DURACION_MAXIMA_S)}
+            </p>
+          )}
+          <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 10, maxWidth: 420 }}>
+          </p>
+        </div>
+
+        <div aria-live="polite" style={{ flex: '1 1 320px', minWidth: 0, background: 'rgba(245,242,236,0.07)', border: '1px solid rgba(245,242,236,0.14)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 200 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#9aa89c' }}>{t('Lo que estoy escuchando')}</span>
+              <div title={t('Volumen del micrófono')} style={{ width: 90, height: 6, borderRadius: 6, background: 'rgba(245,242,236,0.12)', overflow: 'hidden' }}>
+                <div ref={barraNivelRef} style={{ width: '0%', height: '100%', background: '#4ade80', transition: 'width 80ms linear' }} />
+              </div>
             </div>
-            <style>{`@keyframes pulso-mic { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.4); } }`}</style>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20 }}>
-              <Button onClick={escuchando ? detenerModoConferencia : iniciarModoConferencia} className="gap-2" variant={escuchando ? 'destructive' : 'default'}>
-                {escuchando ? <><MicOff size={16} /> {t('Detener')}</> : <><Mic size={16} /> {t('Empezar a escuchar')}</>}
-              </Button>
-              <Button onClick={cambiarLecturaEnVoz} className="gap-2" variant="outline" aria-pressed={leerEnVoz}
-                title={leerEnVoz ? t('Las traducciones se leen en voz alta') : t('Las traducciones solo se muestran en pantalla')}
-                style={{ background: 'transparent', color: '#f5f2ec', borderColor: 'rgba(245,242,236,0.3)' }}>
-                {leerEnVoz ? <><Volume2 size={16} /> {t('Voz activada')}</> : <><VolumeX size={16} /> {t('Voz apagada')}</>}
-              </Button>
-            </div>
-            {avisoInactividad !== null && !hablando && (
-              <Button onClick={seguirEscuchando} variant="outline" className="gap-2"
-                style={{ marginTop: 12, background: 'transparent', color: '#fb923c', borderColor: '#fb923c' }}>
-                <Mic size={16} /> {t('Sigo aquí, seguir escuchando')}
-              </Button>
-            )}
-            {escuchando && (
-              <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 12 }}>
-                {t('Tiempo de sesión')}: {minutos(segundosSesion)} / {minutos(DURACION_MAXIMA_S)}
-              </p>
-            )}
-            <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 10, maxWidth: 420 }}>
-              {leerEnVoz && <>{t('Consejo: usa audífonos para que el micrófono no capte la voz de la traducción.')} </>}
-              {t('Para cuidar el servicio, el micrófono se apaga solo tras 1 minuto sin voz, a los 20 minutos de uso o si sales de la página.')}
+            <p style={{ marginTop: 8, fontSize: 18, minHeight: 27, color: textoEnVivo ? '#f5f2ec' : '#d8d2c2', fontStyle: textoEnVivo ? 'italic' : 'normal', opacity: textoEnVivo || ultimaFrase ? 1 : 0.6 }}>
+              {textoEnVivo || ultimaFrase?.original || (escuchando ? t('Habla y aquí aparecerá el texto…') : t('Enciende el micrófono para empezar.'))}
             </p>
           </div>
-
-          <div aria-live="polite" style={{ flex: '1 1 320px', minWidth: 0, background: 'rgba(245,242,236,0.07)', border: '1px solid rgba(245,242,236,0.14)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 200 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#9aa89c' }}>{t('Lo que estoy escuchando')}</span>
-                <div title={t('Volumen del micrófono')} style={{ width: 90, height: 6, borderRadius: 6, background: 'rgba(245,242,236,0.12)', overflow: 'hidden' }}>
-                  <div ref={barraNivelRef} style={{ width: '0%', height: '100%', background: '#4ade80', transition: 'width 80ms linear' }} />
-                </div>
-              </div>
-              <p style={{ marginTop: 8, fontSize: 18, minHeight: 27, color: textoEnVivo ? '#f5f2ec' : '#d8d2c2', fontStyle: textoEnVivo ? 'italic' : 'normal', opacity: textoEnVivo || ultimaFrase ? 1 : 0.6 }}>
-                {textoEnVivo || ultimaFrase?.original || (escuchando ? t('Habla y aquí aparecerá el texto…') : t('Enciende el micrófono para empezar.'))}
-              </p>
-            </div>
-            <div style={{ height: 1, background: 'rgba(245,242,236,0.14)' }} />
-            <div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#c9a227' }}>{t('Traducción al maya')}</span>
-              <p style={{ marginTop: 8, fontSize: 20, fontWeight: 600, minHeight: 30, opacity: ultimaFrase?.traducido ? 1 : 0.6 }}>
-                {ultimaFrase ? (ultimaFrase.traducido ?? t('Traduciendo…')) : t('La traducción de cada frase aparecerá aquí.')}
-              </p>
-            </div>
-            {escuchando && (
-              <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px dashed rgba(245,242,236,0.14)', fontSize: 12, color: '#9aa89c', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
-                <span>{t('Diagnóstico')}{motorVoz ? ` (${motorVoz === 'azure' ? 'Azure Speech' : t('navegador')})` : ` (${t('conectando…')})`}:</span>
-                {([['inicio', tx('Inició')], ['audio', tx('Recibe audio')], ['sonido', tx('Oye sonido')], ['voz', tx('Reconoce voz')], ['resultado', tx('Da texto')]] as const).map(([clave, etiqueta]) => (
-                  <span key={clave} style={{ color: diagnostico[clave] ? '#4ade80' : '#8a9488' }}>{diagnostico[clave] ? '✓' : '○'} {t(etiqueta)}</span>
-                ))}
-                {diagnostico.reinicios > 0 && <span>Reinicios: {diagnostico.reinicios}</span>}
-                {diagnostico.error && diagnostico.error !== 'no-speech' && <span style={{ color: '#f87171' }}>Error: {diagnostico.error}</span>}
-              </div>
-            )}
+          <div style={{ height: 1, background: 'rgba(245,242,236,0.14)' }} />
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#c9a227' }}>{t('Traducción al maya')}</span>
+            <p style={{ marginTop: 8, fontSize: 20, fontWeight: 600, minHeight: 30, opacity: ultimaFrase?.traducido ? 1 : 0.6 }}>
+              {ultimaFrase ? (ultimaFrase.traducido ?? t('Traduciendo…')) : t('La traducción de cada frase aparecerá aquí.')}
+            </p>
           </div>
+          {escuchando && (
+            <div style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px dashed rgba(245,242,236,0.14)', fontSize: 12, color: '#9aa89c', display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+              <span>{t('Diagnóstico')}{motorVoz ? ` (${motorVoz === 'azure' ? 'Azure Speech' : t('navegador')})` : ` (${t('conectando…')})`}:</span>
+              {([['inicio', tx('Inició')], ['audio', tx('Recibe audio')], ['sonido', tx('Oye sonido')], ['voz', tx('Reconoce voz')], ['resultado', tx('Da texto')]] as const).map(([clave, etiqueta]) => (
+                <span key={clave} style={{ color: diagnostico[clave] ? '#4ade80' : '#8a9488' }}>{diagnostico[clave] ? '✓' : '○'} {t(etiqueta)}</span>
+              ))}
+              {diagnostico.reinicios > 0 && <span>Reinicios: {diagnostico.reinicios}</span>}
+              {diagnostico.error && diagnostico.error !== 'no-speech' && <span style={{ color: '#f87171' }}>Error: {diagnostico.error}</span>}
+            </div>
+          )}
         </div>
-        {transcripcion.length > 0 && (
-          <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
-            <div style={{ display: 'flex', gap: 16, padding: '0 16px' }}>
-              <span style={{ flex: 1, fontSize: 12, letterSpacing: 1, color: '#9aa89c', fontWeight: 700 }}>{t('ESPAÑOL (lo que dices)')}</span>
-              <span style={{ flex: 1, fontSize: 12, letterSpacing: 1, color: '#c9a227', fontWeight: 700 }}>{t('MAYA YUCATECO (traducción)')}</span>
-            </div>
-            {transcripcion.map((linea, i) => (
-              <div key={i} style={{ background: 'rgba(245,242,236,0.06)', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 16 }}>
-                <p style={{ flex: 1, fontSize: 17, color: '#d8d2c2' }}>{linea.original}</p>
-                <p style={{ flex: 1, fontSize: 17, fontWeight: 600 }}>{linea.traducido}</p>
-              </div>
-            ))}
+      </div>
+      {transcripcion.length > 0 && (
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', gap: 16, padding: '0 16px' }}>
+            <span style={{ flex: 1, fontSize: 12, letterSpacing: 1, color: '#9aa89c', fontWeight: 700 }}>{t('ESPAÑOL (lo que dices)')}</span>
+            <span style={{ flex: 1, fontSize: 12, letterSpacing: 1, color: '#c9a227', fontWeight: 700 }}>{t('MAYA YUCATECO (traducción)')}</span>
           </div>
-        )}
-      </section>
+          {transcripcion.map((linea, i) => (
+            <div key={i} style={{ background: 'rgba(245,242,236,0.06)', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 16 }}>
+              <p style={{ flex: 1, fontSize: 17, color: '#d8d2c2' }}>{linea.original}</p>
+              <p style={{ flex: 1, fontSize: 17, fontWeight: 600 }}>{linea.traducido}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
