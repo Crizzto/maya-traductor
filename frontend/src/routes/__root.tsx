@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { PreferenciasProvider, SCRIPT_TEMA_INICIAL } from "../lib/preferencias";
 
 function NotFoundComponent() {
   return (
@@ -84,7 +85,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Un encuentro entre la lengua maya y el español." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "theme-color", content: "#0f5132" },
+      { name: "theme-color", content: "#0f5132", media: "(prefers-color-scheme: light)" },
+      { name: "theme-color", content: "#14100c", media: "(prefers-color-scheme: dark)" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-title", content: "Zacilingua" },
     ],
@@ -109,8 +111,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    // suppressHydrationWarning: el script de abajo cambia la clase y el
+    // idioma de <html> antes de que React cargue, y eso es intencional.
+    <html lang="es" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
         <HeadContent />
       </head>
       <body>
@@ -135,8 +140,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <PreferenciasProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </PreferenciasProvider>
     </QueryClientProvider>
   );
 }

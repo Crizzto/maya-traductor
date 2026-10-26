@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Download, Flower2, Heart, Keyboard, Languages, MessageCircle, Pencil, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Download, Flower2, Heart, Keyboard, Languages, MessageCircle, Moon, Pencil, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import mayaLandscape from '@/assets/maya-landscape.jpg';
 import { postJSON } from '@/lib/api';
@@ -8,6 +8,7 @@ import { ChatSection } from '@/components/zacilingua/ChatSection';
 import { EtiquetaFuente, type Fuente } from '@/components/zacilingua/EtiquetaFuente';
 import { FormularioSugerencia } from '@/components/zacilingua/FormularioSugerencia';
 import { ModoConferencia } from '@/components/zacilingua/ModoConferencia';
+import { tx, usePreferencias } from '@/lib/preferencias';
 
 export const Route = createFileRoute('/')({
   head: () => ({
@@ -28,23 +29,24 @@ function BrandMark({ className = '' }: { className?: string }) {
 }
 
 const phrases = [
-  { category: 'Saludos', text: 'Buenos días', icon: Sun, tone: 'kan' },
-  { category: 'Conversación', text: '¿Cómo estás?', icon: MessageCircle, tone: 'yaax' },
-  { category: 'Gratitud', text: 'Muchas gracias', icon: Heart, tone: 'chak' },
-  { category: 'Conexión', text: '¿Cómo te llamas?', icon: Flower2, tone: 'azul' },
+  { category: tx('Saludos'), text: 'Buenos días', icon: Sun, tone: 'kan' },
+  { category: tx('Conversación'), text: '¿Cómo estás?', icon: MessageCircle, tone: 'yaax' },
+  { category: tx('Gratitud'), text: 'Muchas gracias', icon: Heart, tone: 'chak' },
+  { category: tx('Conexión'), text: '¿Cómo te llamas?', icon: Flower2, tone: 'azul' },
 ];
 
 // Colores cosmológicos mayas (se muestran como leyenda en el pie de página).
 const mayaColors = [
-  { name: 'Chak', token: 'chak', meaning: 'Rojo · el este, la vida y el fuego' },
-  { name: 'Säk', token: 'sak', meaning: 'Blanco · el norte, la luz y la pureza' },
-  { name: "Bo'sh", token: 'boosh', meaning: 'Negro · el poniente, la noche y lo desconocido' },
-  { name: "K'an", token: 'kan', meaning: 'Amarillo · el sur, el maíz y la madurez' },
-  { name: "Ya'ax", token: 'yaax', meaning: 'Verde · el centro, la naturaleza y el eje del mundo' },
-  { name: 'Azul Maya', token: 'azul', meaning: 'Azul · lo sagrado, el cielo y el agua' },
+  { name: 'Chak', token: 'chak', meaning: tx('Rojo · el este, la vida y el fuego') },
+  { name: 'Säk', token: 'sak', meaning: tx('Blanco · el norte, la luz y la pureza') },
+  { name: "Bo'sh", token: 'boosh', meaning: tx('Negro · el poniente, la noche y lo desconocido') },
+  { name: "K'an", token: 'kan', meaning: tx('Amarillo · el sur, el maíz y la madurez') },
+  { name: "Ya'ax", token: 'yaax', meaning: tx('Verde · el centro, la naturaleza y el eje del mundo') },
+  { name: 'Azul Maya', token: 'azul', meaning: tx('Azul · lo sagrado, el cielo y el agua') },
 ];
 
 function Index() {
+  const { t, tema, cambiarTema, idioma, cambiarIdioma } = usePreferencias();
   const [source, setSource] = useState<'maya' | 'spanish'>('maya');
   const [text, setText] = useState('');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -102,7 +104,7 @@ function Index() {
   }
   async function paste() {
     try { setText((await navigator.clipboard.readText()).slice(0, 5000)); input.current?.focus(); }
-    catch { setNotice('No se pudo acceder al portapapeles. Puedes pegar el texto directamente.'); }
+    catch { setNotice(t('No se pudo acceder al portapapeles. Puedes pegar el texto directamente.')); }
   }
   function insertCharacter(character: string) {
     const position = input.current?.selectionStart ?? text.length;
@@ -148,14 +150,14 @@ function Index() {
       await worker.terminate();
       const textoDetectado = data.text.trim();
       if (!textoDetectado) {
-        setNotice('No se detectó texto en la foto. Intenta con una imagen más clara.');
+        setNotice(t('No se detectó texto en la foto. Intenta con una imagen más clara.'));
         return;
       }
       setText(textoDetectado.slice(0, 5000));
       input.current?.focus();
-      setNotice('Texto detectado. Revísalo antes de traducir, el OCR puede cometer errores.');
+      setNotice(t('Texto detectado. Revísalo antes de traducir, el OCR puede cometer errores.'));
     } catch (error) {
-      setNotice('No se pudo leer el texto de la imagen. Intenta de nuevo.');
+      setNotice(t('No se pudo leer el texto de la imagen. Intenta de nuevo.'));
     } finally {
       setProcesandoFoto(false);
     }
@@ -174,7 +176,7 @@ function Index() {
       setFuente(datos.fuente ?? null);
       setTraducido({ original: text.trim(), direccion: isMaya ? 'maya-spanish' : 'spanish-maya' });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'No se pudo conectar con el traductor.');
+      setNotice(error instanceof Error ? error.message : t('No se pudo conectar con el traductor.'));
     } finally {
       setCargando(false);
     }
@@ -192,8 +194,8 @@ function Index() {
 
   async function copiarResultado() {
     if (!resultado) return;
-    try { await navigator.clipboard.writeText(resultado); setNotice('Traducción copiada.'); }
-    catch { setNotice('No se pudo copiar al portapapeles.'); }
+    try { await navigator.clipboard.writeText(resultado); setNotice(t('Traducción copiada.')); }
+    catch { setNotice(t('No se pudo copiar al portapapeles.')); }
   }
 
   async function instalarApp() {
@@ -205,13 +207,13 @@ function Index() {
     } else {
       // iOS Safari (y algunos otros navegadores) no soportan este evento:
       // no hay forma de disparar la instalación por código, solo explicar.
-      setNotice('En iPhone: toca el botón de compartir de Safari y elige "Añadir a pantalla de inicio".');
+      setNotice(t('En iPhone: toca el botón de compartir de Safari y elige «Añadir a pantalla de inicio».'));
     }
   }
 
   function pronunciarResultado() {
     if (!resultado || !('speechSynthesis' in window)) {
-      setNotice('Tu navegador no soporta lectura en voz alta.');
+      setNotice(t('Tu navegador no soporta lectura en voz alta.'));
       return;
     }
     window.speechSynthesis.cancel(); // corta cualquier lectura anterior en curso
@@ -225,7 +227,7 @@ function Index() {
 
   function compartirWhatsApp() {
     if (!resultado) return;
-    const mensaje = `${text}\n\n→ ${resultado}\n\nTraducido con Zacilingua`;
+    const mensaje = `${text}\n\n→ ${resultado}\n\n${t('Traducido con Zacilingua')}`;
     if (navigator.share) {
       navigator.share({ text: mensaje }).catch(() => { });
     } else {
@@ -236,54 +238,64 @@ function Index() {
   return <>
     <header className="site-header">
       <div className="page-width flex h-full items-center justify-between">
-        <a href="#" aria-label="Zacilingua, inicio" className="flex items-center gap-2.5"><BrandMark className="brand-symbol" /><div><div className="brand-name">zacilingua<span className="text-primary">.</span></div><div className="brand-caption">PALABRAS QUE CONECTAN</div></div></a>
-        <nav aria-label="Navegación principal" className="flex items-center gap-6 sm:gap-9">
-          <Button variant="ghost" asChild className="nav-link active"><a href="#traductor">Traductor</a></Button>
-          {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="gap-1.5"><Download size={14} /> Descargar app</Button>}
-          <span className="hidden items-center gap-1.5 border-l border-border pl-5 text-xs text-muted-foreground sm:flex"><Languages size={14} /> ES</span>
+        <a href="#" aria-label={t('Zacilingua, inicio')} className="flex items-center gap-2.5"><BrandMark className="brand-symbol" /><div><div className="brand-name">zacilingua<span className="text-primary">.</span></div><div className="brand-caption">{t('PALABRAS QUE CONECTAN')}</div></div></a>
+        <nav aria-label={t('Navegación principal')} className="flex items-center gap-6 sm:gap-9">
+          <Button variant="ghost" asChild className="nav-link active"><a href="#traductor">{t('Traductor')}</a></Button>
+          {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="gap-1.5"><Download size={14} /> {t('Descargar app')}</Button>}
+          <div className="preferencias">
+            <div className="selector-idioma" role="group" aria-label={t('Idioma de la página')}>
+              <button type="button" aria-pressed={idioma === 'es'} onClick={() => cambiarIdioma('es')} lang="es" title="Español">ES</button>
+              <button type="button" aria-pressed={idioma === 'yua'} onClick={() => cambiarIdioma('yua')} lang="yua" title="Maaya t'aan">MAAYA</button>
+            </div>
+            <button type="button" className="boton-tema" onClick={cambiarTema}
+              aria-label={tema === 'oscuro' ? t('Cambiar a modo claro') : t('Cambiar a modo oscuro')}
+              title={tema === 'oscuro' ? t('Cambiar a modo claro') : t('Cambiar a modo oscuro')}>
+              {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          </div>
         </nav>
       </div>
     </header>
     <div className="maya-band" aria-hidden="true"><span /><span /><span /><span /><span /><span /></div>
 
-    <section className="hero" aria-label="Lengua y cultura maya">
-      <img src={mayaLandscape} alt="La pirámide de Kukulkán en Chichén Itzá, rodeada por la naturaleza de Yucatán" width={1536} height={640} className="hero-image" />
+    <section className="hero" aria-label={t('Lengua y cultura maya')}>
+      <img src={mayaLandscape} alt={t('La pirámide de Kukulkán en Chichén Itzá, rodeada por la naturaleza de Yucatán')} width={1536} height={640} className="hero-image" />
       <div className="page-width hero-content reveal">
-        <div className="hero-eyebrow"><Sparkles size={12} /> UNA LENGUA VIVA. UN LEGADO QUE CONTINÚA.</div>
-        <h1>Traductor maya–español<span>Dos lenguas, una conexión.</span></h1>
+        <div className="hero-eyebrow"><Sparkles size={12} /> {t('UNA LENGUA VIVA. UN LEGADO QUE CONTINÚA.')}</div>
+        <h1>{t('Traductor maya–español')}<span>{t('Dos lenguas, una conexión.')}</span></h1>
       </div>
     </section>
 
     <main id="traductor" className="page-width main-content reveal-late">
       <div className="flex items-center justify-between gap-3">
-        <div><div className="section-eyebrow mb-1">UN PUENTE ENTRE PALABRAS</div><h2 className="section-title">¿Qué quieres expresar?</h2><p className="section-description">Del maya al español. Del español al maya.</p></div>
+        <div><div className="section-eyebrow mb-1">{t('UN PUENTE ENTRE PALABRAS')}</div><h2 className="section-title">{t('¿Qué quieres expresar?')}</h2><p className="section-description">{t('Del maya al español. Del español al maya.')}</p></div>
       </div>
 
-      <section className="translator" aria-label="Traductor bidireccional">
+      <section className="translator" aria-label={t('Traductor bidireccional')}>
         <div className="language-bar">
-          <div className="language-label"><span className="language-icon"><Languages size={15} /></span><span>{isMaya ? 'Maya' : 'Español'}<small>{isMaya ? 'Yucateco' : ''}</small></span><ChevronDown size={12} className="text-muted-foreground" /></div>
-          <Button variant="outline" size="icon" className="swap-button" onClick={swap} title="Intercambiar idiomas" aria-label="Intercambiar idiomas"><ArrowRightLeft /></Button>
-          <div className="language-label language-destination"><span className="language-icon"><Languages size={15} /></span><span>{isMaya ? 'Español' : 'Maya'}<small>{isMaya ? '' : 'Yucateco'}</small></span></div>
+          <div className="language-label"><span className="language-icon"><Languages size={15} /></span><span>{isMaya ? t('Maya') : t('Español')}<small>{isMaya ? t('Yucateco') : ''}</small></span><ChevronDown size={12} className="text-muted-foreground" /></div>
+          <Button variant="outline" size="icon" className="swap-button" onClick={swap} title={t('Intercambiar idiomas')} aria-label={t('Intercambiar idiomas')}><ArrowRightLeft /></Button>
+          <div className="language-label language-destination"><span className="language-icon"><Languages size={15} /></span><span>{isMaya ? t('Español') : t('Maya')}<small>{isMaya ? '' : t('Yucateco')}</small></span></div>
         </div>
         <div className="translator-panels">
           <div className="source-panel">
-            <textarea ref={input} className="source-text" aria-label={`Texto en ${isMaya ? 'maya' : 'español'}`} placeholder={`Escribe aquí en ${isMaya ? 'maya' : 'español'}…`} maxLength={5000} value={text} onChange={event => { setText(event.target.value); setResultado(''); }} />
-            <div className="panel-controls"><div className="flex items-center gap-1"><Button variant="ghost" size="icon" className="tool-icon" onClick={paste} title="Pegar texto" aria-label="Pegar texto"><Clipboard /></Button><Button variant="ghost" size="icon" className="tool-icon" aria-pressed={keyboardOpen} onClick={() => setKeyboardOpen(!keyboardOpen)} title="Caracteres especiales" aria-label="Caracteres especiales"><Keyboard /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={procesandoFoto} onClick={() => entradaFoto.current?.click()} title="Traducir desde foto" aria-label="Traducir desde foto"><Camera className={procesandoFoto ? 'animate-pulse' : ''} /></Button><input ref={entradaFoto} type="file" accept="image/*" capture="environment" className="hidden" onChange={manejarFoto} />{text && <Button variant="ghost" size="icon" className="tool-icon" onClick={() => { setText(''); setResultado(''); input.current?.focus(); }} title="Borrar texto" aria-label="Borrar texto"><X /></Button>}</div><span className="count">{procesandoFoto ? 'Leyendo foto…' : `${text.length.toLocaleString('es-MX')} / 5,000`}</span></div>
+            <textarea ref={input} className="source-text" aria-label={isMaya ? t('Texto en maya') : t('Texto en español')} placeholder={isMaya ? t('Escribe aquí en maya…') : t('Escribe aquí en español…')} maxLength={5000} value={text} onChange={event => { setText(event.target.value); setResultado(''); }} />
+            <div className="panel-controls"><div className="flex items-center gap-1"><Button variant="ghost" size="icon" className="tool-icon" onClick={paste} title={t('Pegar texto')} aria-label={t('Pegar texto')}><Clipboard /></Button><Button variant="ghost" size="icon" className="tool-icon" aria-pressed={keyboardOpen} onClick={() => setKeyboardOpen(!keyboardOpen)} title={t('Caracteres especiales')} aria-label={t('Caracteres especiales')}><Keyboard /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={procesandoFoto} onClick={() => entradaFoto.current?.click()} title={t('Traducir desde foto')} aria-label={t('Traducir desde foto')}><Camera className={procesandoFoto ? 'animate-pulse' : ''} /></Button><input ref={entradaFoto} type="file" accept="image/*" capture="environment" className="hidden" onChange={manejarFoto} />{text && <Button variant="ghost" size="icon" className="tool-icon" onClick={() => { setText(''); setResultado(''); input.current?.focus(); }} title={t('Borrar texto')} aria-label={t('Borrar texto')}><X /></Button>}</div><span className="count">{procesandoFoto ? t('Leyendo foto…') : `${text.length.toLocaleString('es-MX')} / 5,000`}</span></div>
           </div>
           <div className="result-panel" aria-live="polite">
             {resultado
-              ? <><p className="result-text">{resultado}</p>{!isMaya ? null : <small className="block text-[10px] text-muted-foreground mt-1">Pronunciación aproximada (no existe voz nativa en maya)</small>}
+              ? <><p className="result-text">{resultado}</p>{!isMaya ? null : <small className="block text-[10px] text-muted-foreground mt-1">{t('Pronunciación aproximada (no existe voz nativa en maya)')}</small>}
                 {fuente && fuente !== 'error' && (
                   <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
                     <EtiquetaFuente fuente={fuente} />
                     {sugerenciaEnviada
-                      ? <span style={{ fontSize: 12, color: '#1e5631', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> Sugerencia enviada</span>
-                      : !mostrarSugerencia && <button type="button" onClick={abrirSugerencia} style={{ fontSize: 12, fontWeight: 600, color: '#5b5648', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}><Pencil size={12} /> {fuente === 'verificado' ? '¿Ves un error?' : 'Sugerir corrección'}</button>}
+                      ? <span style={{ fontSize: 12, color: 'var(--zl-success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} /> {t('Sugerencia enviada')}</span>
+                      : !mostrarSugerencia && <button type="button" onClick={abrirSugerencia} style={{ fontSize: 12, fontWeight: 600, color: 'var(--zl-link)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}><Pencil size={12} /> {fuente === 'verificado' ? t('¿Ves un error?') : t('Sugerir corrección')}</button>}
                   </div>
                 )}</>
-              : <div className="result-empty"><BrandMark className="result-symbol" /><p>{cargando ? 'Traduciendo…' : 'Aquí comienza una nueva conexión'}</p><small>{cargando ? 'Un momento, por favor.' : 'Tu traducción aparecerá aquí.'}</small></div>
+              : <div className="result-empty"><BrandMark className="result-symbol" /><p>{cargando ? t('Traduciendo…') : t('Aquí comienza una nueva conexión')}</p><small>{cargando ? t('Un momento, por favor.') : t('Tu traducción aparecerá aquí.')}</small></div>
             }
-            <div className="panel-controls"><span className="count">{isMaya ? 'ESPAÑOL' : 'MAYA YUCATECO'}</span><div className="flex items-center gap-1"><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={pronunciarResultado} title="Escuchar traducción" aria-label="Escuchar traducción"><Volume2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={compartirWhatsApp} title="Compartir por WhatsApp" aria-label="Compartir por WhatsApp"><Share2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={copiarResultado} title="Copiar traducción" aria-label="Copiar traducción"><Copy /></Button></div></div>
+            <div className="panel-controls"><span className="count">{isMaya ? t('ESPAÑOL') : t('MAYA YUCATECO')}</span><div className="flex items-center gap-1"><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={pronunciarResultado} title={t('Escuchar traducción')} aria-label={t('Escuchar traducción')}><Volume2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={compartirWhatsApp} title={t('Compartir por WhatsApp')} aria-label={t('Compartir por WhatsApp')}><Share2 /></Button><Button variant="ghost" size="icon" className="tool-icon" disabled={!resultado} onClick={copiarResultado} title={t('Copiar traducción')} aria-label={t('Copiar traducción')}><Copy /></Button></div></div>
           </div>
         </div>
         {mostrarSugerencia && traducido && (
@@ -296,8 +308,8 @@ function Index() {
             onNotice={setNotice}
           />
         )}
-        {keyboardOpen && <div className="character-tray"><span>Caracteres</span>{['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', 'ʼ'].map(character => <Button key={character} variant="outline" size="sm" onClick={() => insertCharacter(character)} aria-label={`Insertar ${character}`}>{character}</Button>)}</div>}
-        <div className="translator-bottom"><span className="ai-label"><Languages size={14} /> Maya yucateco <span className="hidden sm:inline">⇄</span> Español</span><Button className="translate-cta" disabled={!text.trim() || cargando} onClick={traducir}>{cargando ? <Sparkles className="animate-spin" /> : resultado ? <Check /> : <Sparkles />} {cargando ? 'Traduciendo…' : resultado ? 'Traducido' : 'Traducir texto'}{!cargando && !resultado && <ArrowRight />}</Button></div>
+        {keyboardOpen && <div className="character-tray"><span>{t('Caracteres')}</span>{['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', 'ʼ'].map(character => <Button key={character} variant="outline" size="sm" onClick={() => insertCharacter(character)} aria-label={`${t('Insertar')} ${character}`}>{character}</Button>)}</div>}
+        <div className="translator-bottom"><span className="ai-label"><Languages size={14} /> {t('Maya yucateco')} <span className="hidden sm:inline">⇄</span> {t('Español')}</span><Button className="translate-cta" disabled={!text.trim() || cargando} onClick={traducir}>{cargando ? <Sparkles className="animate-spin" /> : resultado ? <Check /> : <Sparkles />} {cargando ? t('Traduciendo…') : resultado ? t('Traducido') : t('Traducir texto')}{!cargando && !resultado && <ArrowRight />}</Button></div>
       </section>
 
 
@@ -307,12 +319,12 @@ function Index() {
       <ChatSection />
 
       <section className="phrases-section" aria-labelledby="phrases-title">
-        <div className="flex items-center justify-between"><h3 id="phrases-title" className="phrase-heading"><Sun size={16} /> Las pequeñas palabras nos acercan</h3><span className="hidden text-[10px] text-muted-foreground sm:block">UN POCO DE INSPIRACIÓN</span></div>
-        <div className="phrase-grid">{phrases.map(phrase => <Button key={phrase.category} variant="ghost" className="phrase-card" data-tone={phrase.tone} onClick={() => { setSource('spanish'); setText(phrase.text); setResultado(''); input.current?.focus(); document.getElementById('traductor')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }}><span className="phrase-top"><span className="phrase-icon"><phrase.icon size={14} /></span>{phrase.category}<ArrowRight /></span><span className="phrase-text">{phrase.text}</span></Button>)}</div>
+        <div className="flex items-center justify-between"><h3 id="phrases-title" className="phrase-heading"><Sun size={16} /> {t('Las pequeñas palabras nos acercan')}</h3><span className="hidden text-[10px] text-muted-foreground sm:block">{t('UN POCO DE INSPIRACIÓN')}</span></div>
+        <div className="phrase-grid">{phrases.map(phrase => <Button key={phrase.category} variant="ghost" className="phrase-card" data-tone={phrase.tone} onClick={() => { setSource('spanish'); setText(phrase.text); setResultado(''); input.current?.focus(); document.getElementById('traductor')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }}><span className="phrase-top"><span className="phrase-icon"><phrase.icon size={14} /></span>{t(phrase.category)}<ArrowRight /></span><span className="phrase-text">{phrase.text}</span></Button>)}</div>
       </section>
     </main>
 
     <div className="maya-steps" aria-hidden="true" />
-    <footer className="site-footer"><div className="page-width footer-inner"><div><span className="footer-brand">Zacilingua.</span> Un encuentro entre lenguas y culturas.</div><div className="color-legend" aria-label="Colores de la cosmovisión maya">{mayaColors.map(color => <span key={color.token} className="color-chip" title={color.meaning}><i style={{ background: `var(--${color.token})` }} />{color.name}</span>)}</div></div></footer>
+    <footer className="site-footer"><div className="page-width footer-inner"><div><span className="footer-brand">Zacilingua.</span> {t('Un encuentro entre lenguas y culturas.')}{idioma === 'yua' && <div className="aviso-traduccion-interfaz">{t('Interfaz traducida automáticamente, en revisión.')}{t('Interfaz traducida automáticamente, en revisión.') !== 'Interfaz traducida automáticamente, en revisión.' && ' (Interfaz traducida automáticamente, en revisión.)'}</div>}</div><div className="color-legend" aria-label={t('Colores de la cosmovisión maya')}>{mayaColors.map(color => <span key={color.token} className="color-chip" title={t(color.meaning)}><i style={{ background: `var(--${color.token})` }} />{color.name}</span>)}</div></div></footer>
   </>;
 }

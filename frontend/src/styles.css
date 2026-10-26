@@ -130,41 +130,106 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+
+  /* Colores de los componentes de Zacilingua (chat, sugerencias,
+     etiquetas de fuente). El modo oscuro los redefine en .dark. */
+  --zl-surface: #ffffff;
+  --zl-surface-soft: #fbf8f1;
+  --zl-border-soft: #e3ddc9;
+  --zl-input: #ffffff;
+  --zl-text: #1c2b22;
+  --zl-text-soft: #6b6656;
+  --zl-text-faint: #8a8370;
+  --zl-label: #3d3a30;
+  --zl-success: #1e5631;
+  --zl-link: #5b5648;
+  --zl-bubble-user-bg: #1a2e1f;
+  --zl-bubble-user-fg: #f5f2ec;
+  --zl-bubble-bot-bg: #f5f2ec;
+  --zl-bubble-bot-fg: #1a2e1f;
+  --zl-accent-label: #b5651d;
+  --zl-fuente-verificado-bg: #e3f1e6;
+  --zl-fuente-verificado-fg: #1e5631;
+  --zl-fuente-referencia-bg: #e2edf6;
+  --zl-fuente-referencia-fg: #1d4e74;
+  --zl-fuente-historico-bg: #f6ecd2;
+  --zl-fuente-historico-fg: #7a5a12;
+  --zl-fuente-automatico-bg: #ebe8e1;
+  --zl-fuente-automatico-fg: #5b5648;
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+  /* Modo oscuro de Zacilingua: noche cálida (Bo'sh) en lugar del azul
+     pizarra genérico. Los colores mayas se aclaran un poco para que se
+     lean bien sobre fondo oscuro; --sak y --boosh no cambian porque son
+     el blanco y el negro "reales" de la leyenda y de la franja de colores. */
+  --background: oklch(0.17 0.012 55);
+  --foreground: oklch(0.93 0.012 85);
+  --card: oklch(0.21 0.014 55);
+  --card-foreground: oklch(0.93 0.012 85);
+  --popover: oklch(0.21 0.014 55);
+  --popover-foreground: oklch(0.93 0.012 85);
+  --primary: oklch(0.72 0.1 212);
+  --primary-foreground: oklch(0.17 0.012 55);
+  --secondary: oklch(0.27 0.03 215);
+  --secondary-foreground: oklch(0.88 0.05 210);
+  --muted: oklch(0.24 0.014 55);
+  --muted-foreground: oklch(0.72 0.02 75);
+  --accent: oklch(0.27 0.03 215);
+  --accent-foreground: oklch(0.9 0.04 210);
+  --destructive: oklch(0.65 0.19 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.32 0.016 55);
+  --input: oklch(0.34 0.016 55);
+  --ring: oklch(0.68 0.1 210);
+
+  --chak-soft: oklch(0.27 0.045 30);
+  --kan: oklch(0.8 0.14 80);
+  --kan-soft: oklch(0.28 0.04 80);
+  --yaax: oklch(0.68 0.12 158);
+  --yaax-soft: oklch(0.27 0.035 158);
+  --azul: oklch(0.74 0.1 210);
+  --azul-deep: oklch(0.72 0.1 214);
+  --azul-soft: oklch(0.27 0.035 210);
+  --tool-shadow: 0 10px 34px oklch(0 0 0 / 35%);
+
+  --zl-surface: var(--card);
+  --zl-surface-soft: oklch(0.23 0.014 60);
+  --zl-border-soft: var(--border);
+  --zl-input: oklch(0.19 0.012 55);
+  --zl-text: var(--foreground);
+  --zl-text-soft: var(--muted-foreground);
+  --zl-text-faint: oklch(0.65 0.02 75);
+  --zl-label: oklch(0.85 0.015 80);
+  --zl-success: oklch(0.78 0.12 150);
+  --zl-link: oklch(0.8 0.02 80);
+  --zl-bubble-user-bg: oklch(0.42 0.07 158);
+  --zl-bubble-user-fg: oklch(0.97 0.01 85);
+  --zl-bubble-bot-bg: oklch(0.26 0.014 55);
+  --zl-bubble-bot-fg: var(--foreground);
+  --zl-accent-label: oklch(0.75 0.12 60);
+  --zl-fuente-verificado-bg: oklch(0.3 0.05 150);
+  --zl-fuente-verificado-fg: oklch(0.86 0.1 150);
+  --zl-fuente-referencia-bg: oklch(0.3 0.05 240);
+  --zl-fuente-referencia-fg: oklch(0.86 0.07 230);
+  --zl-fuente-historico-bg: oklch(0.32 0.05 80);
+  --zl-fuente-historico-fg: oklch(0.88 0.09 85);
+  --zl-fuente-automatico-bg: oklch(0.3 0.01 70);
+  --zl-fuente-automatico-fg: oklch(0.86 0.01 80);
+
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --sidebar: oklch(0.21 0.014 55);
+  --sidebar-foreground: oklch(0.93 0.012 85);
+  --sidebar-primary: oklch(0.72 0.1 212);
+  --sidebar-primary-foreground: oklch(0.17 0.012 55);
+  --sidebar-accent: oklch(0.27 0.03 215);
+  --sidebar-accent-foreground: oklch(0.93 0.012 85);
+  --sidebar-border: oklch(0.32 0.016 55);
+  --sidebar-ring: oklch(0.68 0.1 210);
 }
 
 @layer base {
@@ -1058,4 +1123,56 @@ textarea {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Selector de tema e idioma del encabezado */
+.preferencias {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selector-idioma {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--card);
+}
+
+.selector-idioma button {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  transition: background .2s, color .2s;
+}
+
+.selector-idioma button[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.boton-tema {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  transition: background .2s, transform .2s;
+}
+
+.boton-tema:hover {
+  transform: rotate(-12deg);
+}
+
+.aviso-traduccion-interfaz {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 6px;
 }
