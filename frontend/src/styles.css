@@ -1176,3 +1176,48 @@ textarea {
   color: var(--muted-foreground);
   margin-top: 6px;
 }
+
+/* Teléfonos: que el encabezado nunca se salga de la pantalla */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@media (max-width: 700px) {
+  .preferencias {
+    gap: 6px;
+  }
+
+  .selector-idioma button {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .boton-tema {
+    width: 30px;
+    height: 30px;
+  }
+
+  .boton-descargar {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 999px;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand-caption {
+    display: none;
+  }
+
+  .brand-name {
+    font-size: 22px;
+  }
+
+  .brand-symbol {
+    width: 28px;
+    height: 28px;
+  }
+}

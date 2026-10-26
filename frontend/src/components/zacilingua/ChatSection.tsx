@@ -9,6 +9,12 @@ import { EtiquetaFuente, type Fuente } from './EtiquetaFuente';
 import { TextoMarkdown } from './TextoMarkdown';
 import { useT } from '@/lib/preferencias';
 
+// Límites del chat: mensajes cortos, y conversaciones con el agente de
+// máximo 15 preguntas (cada pregunta reenvía todo el historial a Gemini,
+// así que las conversaciones largas gastan mucho más de la cuota).
+const MAX_CARACTERES_MENSAJE = 1000;
+const MAX_PREGUNTAS_AGENTE = 15;
+
 export function ChatSection() {
   const t = useT();
   const [mensajesChat, setMensajesChat] = useState<{ texto: string; idioma?: 'es' | 'yua'; fuente?: Fuente; esUsuario: boolean }[]>([]);
@@ -22,9 +28,17 @@ export function ChatSection() {
     finChat.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensajesChat]);
 
+  const preguntasAgente = historialAgenteRef.current.length / 2;
+  const limiteAgente = modoAgente && preguntasAgente >= MAX_PREGUNTAS_AGENTE;
+
+  function nuevaConversacion() {
+    setMensajesChat([]);
+    historialAgenteRef.current = [];
+  }
+
   async function enviarMensajeChat() {
-    const texto = textoChat.trim();
-    if (!texto || enviandoChat) return;
+    const texto = textoChat.trim().slice(0, MAX_CARACTERES_MENSAJE);
+    if (!texto || enviandoChat || limiteAgente) return;
     setTextoChat('');
     setEnviandoChat(true);
     setMensajesChat((previos) => [...previos, { texto, esUsuario: true }]);
@@ -59,7 +73,7 @@ export function ChatSection() {
   }
 
   return (
-      <section className="chat-section" aria-labelledby="chat-title" style={{ marginTop: 24, background: 'var(--zl-surface)', color: 'var(--zl-text)', border: '1px solid var(--zl-border-soft)', borderRadius: 24, padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <section className="chat-section" aria-labelledby="chat-title" style={{ marginTop: 24, background: 'var(--zl-surface)', color: 'var(--zl-text)', border: '1px solid var(--zl-border-soft)', borderRadius: 24, padding: 'clamp(18px, 5vw, 32px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h3 id="chat-title" style={{ fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={18} /> {t('Chat')}</h3>
@@ -89,18 +103,29 @@ export function ChatSection() {
               </div>
             </div>
           ))}
+          {modoAgente && preguntasAgente > 0 && !limiteAgente && (
+            <div style={{ fontSize: 12, color: 'var(--zl-text-faint)', textAlign: 'center' }}>{t('Preguntas en esta conversación')}: {preguntasAgente} / {MAX_PREGUNTAS_AGENTE}</div>
+          )}
           {enviandoChat && <div style={{ fontSize: 13, color: 'var(--zl-text-faint)', fontStyle: 'italic' }}>{modoAgente ? t('Pensando…') : t('Traduciendo…')}</div>}
           <div ref={finChat} />
         </div>
+        {limiteAgente && (
+          <div style={{ marginBottom: 12, padding: '12px 16px', borderRadius: 14, background: 'var(--zl-surface-soft)', border: '1px solid var(--zl-border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 14, color: 'var(--zl-text-soft)' }}>
+            <span>{t('Esta conversación llegó a su límite de preguntas. Empieza una nueva para seguir.')}</span>
+            <Button variant="outline" size="sm" onClick={nuevaConversacion}>{t('Nueva conversación')}</Button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             value={textoChat}
             onChange={(e) => setTextoChat(e.target.value)}
+            maxLength={MAX_CARACTERES_MENSAJE}
+            disabled={limiteAgente}
             onKeyDown={(e) => { if (e.key === 'Enter') enviarMensajeChat(); }}
             placeholder={t('Escribe un mensaje…')}
             style={{ flex: 1, border: '1px solid var(--zl-border-soft)', borderRadius: 999, padding: '10px 18px', fontSize: 16, outline: 'none', background: 'var(--zl-input)', color: 'var(--zl-text)' }}
           />
-          <Button size="icon" onClick={enviarMensajeChat} disabled={!textoChat.trim() || enviandoChat} className="rounded-full" aria-label={t('Enviar')}><Send size={16} /></Button>
+          <Button size="icon" onClick={enviarMensajeChat} disabled={!textoChat.trim() || enviandoChat || limiteAgente} className="rounded-full" aria-label={t('Enviar')}><Send size={16} /></Button>
         </div>
       </section>
   );

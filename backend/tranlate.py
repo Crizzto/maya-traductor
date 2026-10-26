@@ -55,6 +55,8 @@ almacen.inicializar()
 # Tamaños máximos aceptados, para que nadie mande textos gigantes.
 MAX_TEXTO_TRADUCIR = 5000
 MAX_TEXTO_CHAT = 1000
+# Sesiones de voz con Azure Speech por día, sumando a todos los usuarios.
+VOZ_LIMITE_DIARIO = int(os.environ.get("VOZ_LIMITE_DIARIO", "150"))
 
 def _resolver_direccion(valor: str):
     """
@@ -221,6 +223,12 @@ async def api_voz_token():
     """
     if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
         return jsonify(error="Azure Speech no está configurado (faltan AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)."), 503
+    # Tope global de sesiones de voz por día (sumando a todos los usuarios).
+    # Al llegar, el frontend usa el reconocedor del navegador (Chrome/Edge),
+    # que no gasta la cuota de Azure Speech.
+    if almacen.uso_obtener("voz_sesiones", almacen.dia_actual()) >= VOZ_LIMITE_DIARIO:
+        logger.warning("[VOZ] Se alcanzó el límite diario de %s sesiones de Azure Speech.", VOZ_LIMITE_DIARIO)
+        return jsonify(error="Se alcanzó el límite diario de voz con Azure; se usará el reconocedor del navegador."), 503
     try:
         token = await asyncio.to_thread(_emitir_token_voz)
     except requests.HTTPError as e:
@@ -246,7 +254,7 @@ def estado():
         estado="ok",
         mensaje="Backend del Traductor Maya funcionando. Usa /api/traducir (POST).",
         uso=almacen.resumen_uso(),
-        limites={"azure_caracteres_mes": AZURE_LIMITE_MENSUAL, "gemini_peticiones_dia": GEMINI_LIMITE_DIARIO},
+        limites={"azure_caracteres_mes": AZURE_LIMITE_MENSUAL, "gemini_peticiones_dia": GEMINI_LIMITE_DIARIO, "voz_sesiones_dia": VOZ_LIMITE_DIARIO},
     )
 
 

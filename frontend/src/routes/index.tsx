@@ -138,6 +138,16 @@ function Index() {
     const archivo = evento.target.files?.[0];
     evento.target.value = '';
     if (!archivo) return;
+    // Límites: solo imágenes, y de máximo 10 MB (las más grandes tardan
+    // mucho en leerse dentro del celular y no mejoran el resultado).
+    if (!archivo.type.startsWith('image/')) {
+      setNotice(t('Ese archivo no es una imagen. Elige una foto.'));
+      return;
+    }
+    if (archivo.size > 10 * 1024 * 1024) {
+      setNotice(t('La foto pesa más de 10 MB. Prueba con una más ligera o recórtala.'));
+      return;
+    }
 
     setProcesandoFoto(true);
     setResultado('');
@@ -238,10 +248,10 @@ function Index() {
   return <>
     <header className="site-header">
       <div className="page-width flex h-full items-center justify-between">
-        <a href="#" aria-label={t('Zacilingua, inicio')} className="flex items-center gap-2.5"><BrandMark className="brand-symbol" /><div><div className="brand-name">zacilingua<span className="text-primary">.</span></div><div className="brand-caption">{t('PALABRAS QUE CONECTAN')}</div></div></a>
-        <nav aria-label={t('Navegación principal')} className="flex items-center gap-6 sm:gap-9">
-          <Button variant="ghost" asChild className="nav-link active"><a href="#traductor">{t('Traductor')}</a></Button>
-          {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="gap-1.5"><Download size={14} /> {t('Descargar app')}</Button>}
+        <a href="#" aria-label={t('Zacilingua, inicio')} className="flex min-w-0 items-center gap-2.5"><BrandMark className="brand-symbol" /><div><div className="brand-name">zacilingua<span className="text-primary">.</span></div><div className="brand-caption">{t('PALABRAS QUE CONECTAN')}</div></div></a>
+        <nav aria-label={t('Navegación principal')} className="flex items-center gap-2 sm:gap-6">
+          <Button variant="ghost" asChild className="nav-link active hidden sm:inline-flex"><a href="#traductor">{t('Traductor')}</a></Button>
+          {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="boton-descargar gap-1.5" title={t('Descargar app')} aria-label={t('Descargar app')}><Download size={14} /> <span className="hidden sm:inline">{t('Descargar app')}</span></Button>}
           <div className="preferencias">
             <div className="selector-idioma" role="group" aria-label={t('Idioma de la página')}>
               <button type="button" aria-pressed={idioma === 'es'} onClick={() => cambiarIdioma('es')} lang="es" title="Español">ES</button>

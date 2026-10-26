@@ -8,6 +8,18 @@ import { Button } from '@/components/ui/button';
 import { getJSON, postJSON } from '@/lib/api';
 import { tx, useT } from '@/lib/preferencias';
 
+// Límites de uso: cada minuto con el micrófono abierto gasta de la cuota
+// gratuita de Azure Speech (5 horas al mes), aunque nadie hable.
+const INACTIVIDAD_S = 60;        // sin voz durante 1 minuto → se apaga
+const AVISO_S = 15;              // los últimos 15 s se muestra una cuenta atrás
+const DURACION_MAXIMA_S = 20 * 60; // ninguna sesión dura más de 20 minutos
+const OCULTA_MAXIMO_S = 30;      // si el usuario sale de la página 30 s → se apaga
+
+function minutos(segundos: number) {
+  const s = Math.max(0, Math.floor(segundos));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: string) => void }) {
   const t = useT();
   const [escuchando, setEscuchando] = useState(false);
@@ -23,7 +35,67 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   // reconocedor integrado del navegador (solo Chrome/Edge) como respaldo.
   const [motorVoz, setMotorVoz] = useState<'azure' | 'navegador' | null>(null);
   const azureVozRef = useRef<{ reconocedor: any; renovar: number } | null>(null);
-  const marcar = (cambio: Partial<typeof diagnostico>) => setDiagnostico((previo) => ({ ...previo, ...cambio }));
+  const marcar = (cambio: Partial<typeof diagnostico>) => {
+    if (cambio.sonido || cambio.voz || cambio.resultado) registrarActividad();
+    setDiagnostico((previo) => ({ ...previo, ...cambio }));
+  };
+
+  // Control de límites (ver constantes arriba).
+  const ultimaActividadRef = useRef(0);
+  const inicioSesionRef = useRef(0);
+  const ocultaDesdeRef = useRef<number | null>(null);
+  const [avisoInactividad, setAvisoInactividad] = useState<number | null>(null);
+  const [segundosSesion, setSegundosSesion] = useState(0);
+
+  function registrarActividad() {
+    ultimaActividadRef.current = Date.now();
+  }
+
+  function seguirEscuchando() {
+    registrarActividad();
+    setAvisoInactividad(null);
+  }
+
+  useEffect(() => {
+    if (!escuchando) {
+      setAvisoInactividad(null);
+      setSegundosSesion(0);
+      return;
+    }
+    const revisar = window.setInterval(() => {
+      const ahora = Date.now();
+      // Mientras la app lee una traducción también cuenta como actividad.
+      if (lecturasPendientesRef.current > 0) ultimaActividadRef.current = ahora;
+
+      const restante = INACTIVIDAD_S - (ahora - ultimaActividadRef.current) / 1000;
+      if (restante <= 0) {
+        detenerModoConferencia();
+        setNotice(t('Micrófono apagado por inactividad: no se detectó voz durante 1 minuto.'));
+        return;
+      }
+      setAvisoInactividad(restante <= AVISO_S ? Math.ceil(restante) : null);
+
+      const sesion = (ahora - inicioSesionRef.current) / 1000;
+      setSegundosSesion(sesion);
+      if (sesion >= DURACION_MAXIMA_S) {
+        detenerModoConferencia();
+        setNotice(t('Sesión terminada: el modo conferencia se apaga solo a los 20 minutos. Puedes volver a encenderlo.'));
+        return;
+      }
+
+      if (document.hidden) {
+        ocultaDesdeRef.current ??= ahora;
+        if ((ahora - ocultaDesdeRef.current) / 1000 >= OCULTA_MAXIMO_S) {
+          detenerModoConferencia();
+          setNotice(t('Micrófono apagado porque saliste de la página.'));
+        }
+      } else {
+        ocultaDesdeRef.current = null;
+      }
+    }, 1000);
+    return () => window.clearInterval(revisar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escuchando]);
   const [ultimaFrase, setUltimaFrase] = useState<{ original: string; traducido: string | null } | null>(null);
   const barraNivelRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<{ stream: MediaStream; contexto: AudioContext; frame: number } | null>(null);
@@ -126,6 +198,9 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
     }
     setDiagnostico({ inicio: false, audio: false, sonido: false, voz: false, resultado: false, error: '', reinicios: 0 });
     setUltimaFrase(null);
+    ultimaActividadRef.current = Date.now();
+    inicioSesionRef.current = Date.now();
+    ocultaDesdeRef.current = null;
     escuchandoRef.current = true;
     setEscuchando(true);
 
@@ -399,19 +474,19 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   }, []);
 
   return (
-      <section className="conference-section" aria-labelledby="conference-title" style={{ marginTop: 48, background: '#1a2e1f', color: '#f5f2ec', borderRadius: 24, padding: 40 }}>
+      <section className="conference-section" aria-labelledby="conference-title" style={{ marginTop: 48, background: '#1a2e1f', color: '#f5f2ec', borderRadius: 24, padding: 'clamp(20px, 5vw, 40px)' }}>
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 24, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             <h3 id="conference-title" style={{ fontSize: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Mic size={20} /> {t('Modo conferencia')}</h3>
             <p style={{ fontSize: 15, color: '#c7c2b0', marginTop: 4, maxWidth: 520 }}>{t('Escucha lo que se dice en español y lo traduce a maya en voz alta, frase por frase. Útil para seguir una charla en vivo con audífonos.')}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
               <span style={{
                 width: 10, height: 10, borderRadius: 10,
-                background: hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#6b7a6e',
+                background: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#6b7a6e',
                 animation: estadoMic !== 'apagado' ? 'pulso-mic 1.1s ease-in-out infinite' : 'none',
               }} />
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#8a9488' }}>
-                {hablando ? t('LEYENDO TRADUCCIÓN · micrófono en pausa') : estadoMic === 'detectando' ? t('¡DETECTANDO TU VOZ!') : estadoMic === 'escuchando' ? t('ESCUCHANDO · esperando que hables') : t('MICRÓFONO APAGADO')}
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: avisoInactividad !== null && !hablando ? '#fb923c' : hablando ? '#60a5fa' : estadoMic === 'detectando' ? '#4ade80' : estadoMic === 'escuchando' ? '#c9a227' : '#8a9488' }}>
+                {avisoInactividad !== null && !hablando ? `${t('SIN VOZ · se apagará en')} ${avisoInactividad} s` : hablando ? t('LEYENDO TRADUCCIÓN · micrófono en pausa') : estadoMic === 'detectando' ? t('¡DETECTANDO TU VOZ!') : estadoMic === 'escuchando' ? t('ESCUCHANDO · esperando que hables') : t('MICRÓFONO APAGADO')}
               </span>
             </div>
             <style>{`@keyframes pulso-mic { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.4); } }`}</style>
@@ -425,14 +500,24 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
                 {leerEnVoz ? <><Volume2 size={16} /> {t('Voz activada')}</> : <><VolumeX size={16} /> {t('Voz apagada')}</>}
               </Button>
             </div>
-            {leerEnVoz && (
-              <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 10, maxWidth: 420 }}>
-                {t('Consejo: usa audífonos para que el micrófono no capte la voz de la traducción.')}
+            {avisoInactividad !== null && !hablando && (
+              <Button onClick={seguirEscuchando} variant="outline" className="gap-2"
+                style={{ marginTop: 12, background: 'transparent', color: '#fb923c', borderColor: '#fb923c' }}>
+                <Mic size={16} /> {t('Sigo aquí, seguir escuchando')}
+              </Button>
+            )}
+            {escuchando && (
+              <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 12 }}>
+                {t('Tiempo de sesión')}: {minutos(segundosSesion)} / {minutos(DURACION_MAXIMA_S)}
               </p>
             )}
+            <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 10, maxWidth: 420 }}>
+              {leerEnVoz && <>{t('Consejo: usa audífonos para que el micrófono no capte la voz de la traducción.')} </>}
+              {t('Para cuidar el servicio, el micrófono se apaga solo tras 1 minuto sin voz, a los 20 minutos de uso o si sales de la página.')}
+            </p>
           </div>
 
-          <div aria-live="polite" style={{ flex: '1 1 320px', background: 'rgba(245,242,236,0.07)', border: '1px solid rgba(245,242,236,0.14)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 200 }}>
+          <div aria-live="polite" style={{ flex: '1 1 320px', minWidth: 0, background: 'rgba(245,242,236,0.07)', border: '1px solid rgba(245,242,236,0.14)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 200 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#9aa89c' }}>{t('Lo que estoy escuchando')}</span>
