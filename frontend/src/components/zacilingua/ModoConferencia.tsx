@@ -573,9 +573,6 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
             </p>
           )}
           <p style={{ fontSize: 12, color: '#9aa89c', marginTop: 10, maxWidth: 420 }}>
-            {leerEnVoz && <>{t('Consejo: usa audífonos para que el micrófono no capte la voz de la traducción.')} </>}
-            {leerEnVoz && ES_IOS && <>{t('En iPhone, la app deja de escuchar mientras lee cada traducción y vuelve a escuchar al terminar.')} </>}
-            {t('Para cuidar el servicio, el micrófono se apaga solo tras 1 minuto sin voz, a los 20 minutos de uso o si sales de la página.')}
           </p>
         </div>
 
