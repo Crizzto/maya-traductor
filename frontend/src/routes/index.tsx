@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Download, Flower2, Heart, Keyboard, Languages, MessageCircle, Moon, Pencil, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Camera, Check, ChevronDown, Clipboard, Copy, Download, Flower2, Heart, Keyboard, Languages, Mail, MessageCircle, Moon, Pencil, Share2, Sparkles, Sun, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import mayaLandscape from '@/assets/maya-landscape.jpg';
 import { postJSON } from '@/lib/api';
@@ -24,6 +24,14 @@ export const Route = createFileRoute('/')({
   }),
   component: Index,
 });
+
+// Datos de contacto del proyecto (encabezado y pie de página).
+const CORREO = 'zacilingua@gmail.com';
+const FACEBOOK = 'https://www.facebook.com/profile.php?id=61596260249699';
+
+function IconoFacebook({ size = 15 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.3H8v3h2.5V21h3Z" /></svg>;
+}
 
 // Logo pequeño: el venado de Zacilingua (public/logo-venado.png).
 function BrandMark({ className = '' }: { className?: string }) {
@@ -344,6 +352,10 @@ function Index() {
         <nav aria-label={t('Navegación principal')} className="flex items-center gap-2 sm:gap-6">
           <Button variant="ghost" asChild className="nav-link active hidden sm:inline-flex"><a href="#traductor">{t('Traductor')}</a></Button>
           {!yaInstalada && <Button variant="outline" size="sm" onClick={instalarApp} className="boton-descargar gap-1.5" title={t('Descargar app')} aria-label={t('Descargar app')}><Download size={14} /> <span className="hidden sm:inline">{t('Descargar app')}</span></Button>}
+          <div className="contacto" role="group" aria-label={t('Contacto')}>
+            <a className="boton-contacto" href={`mailto:${CORREO}`} title={CORREO} aria-label={`${t('Escríbenos por correo')}: ${CORREO}`}><Mail size={15} /></a>
+            <a className="boton-contacto" href={FACEBOOK} target="_blank" rel="noopener noreferrer" title="Facebook" aria-label={t('Síguenos en Facebook')}><IconoFacebook /></a>
+          </div>
           <div className="preferencias">
             <div className="selector-idioma" role="group" aria-label={t('Idioma de la página')}>
               <button type="button" aria-pressed={idioma === 'es'} onClick={() => cambiarIdioma('es')} lang="es" title="Español">ES</button>
@@ -427,6 +439,6 @@ function Index() {
     </main>
 
     <div className="maya-steps" aria-hidden="true" />
-    <footer className="site-footer"><div className="page-width footer-inner"><div><span className="footer-brand">Zacilingua.</span> {t('Un encuentro entre lenguas y culturas.')}{idioma === 'yua' && <div className="aviso-traduccion-interfaz">{t('Interfaz traducida automáticamente, en revisión.')}{t('Interfaz traducida automáticamente, en revisión.') !== 'Interfaz traducida automáticamente, en revisión.' && ' (Interfaz traducida automáticamente, en revisión.)'}</div>}</div><div className="color-legend" aria-label={t('Colores de la cosmovisión maya')}>{mayaColors.map(color => <span key={color.token} className="color-chip" title={t(color.meaning)}><i style={{ background: `var(--${color.token})` }} />{color.name}</span>)}</div></div></footer>
+    <footer className="site-footer"><div className="page-width footer-inner"><div><span className="footer-brand">Zacilingua.</span> {t('Un encuentro entre lenguas y culturas.')}<div className="footer-contacto"><a href={`mailto:${CORREO}`}><Mail size={14} /> {CORREO}</a><a href={FACEBOOK} target="_blank" rel="noopener noreferrer"><IconoFacebook size={14} /> Facebook</a></div>{idioma === 'yua' && <div className="aviso-traduccion-interfaz">{t('Interfaz traducida automáticamente, en revisión.')}{t('Interfaz traducida automáticamente, en revisión.') !== 'Interfaz traducida automáticamente, en revisión.' && ' (Interfaz traducida automáticamente, en revisión.)'}</div>}</div><div className="color-legend" aria-label={t('Colores de la cosmovisión maya')}>{mayaColors.map(color => <span key={color.token} className="color-chip" title={t(color.meaning)}><i style={{ background: `var(--${color.token})` }} />{color.name}</span>)}</div></div></footer>
   </>;
 }

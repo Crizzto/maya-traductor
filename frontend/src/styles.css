@@ -1247,6 +1247,68 @@ body {
 }
 
 @media (max-width: 700px) {
-  .brand-symbol.brand-venado { height: 38px; }
-  .dark .brand-symbol.brand-venado { height: 30px; padding: 2px 4px; border-radius: 8px; }
+  .brand-symbol.brand-venado {
+    height: 38px;
+  }
+
+  .dark .brand-symbol.brand-venado {
+    height: 30px;
+    padding: 2px 4px;
+    border-radius: 8px;
+  }
+}
+
+/* Contacto: íconos en el encabezado y enlaces con texto en el pie */
+.contacto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.boton-contacto {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  transition: background .2s, color .2s;
+}
+
+.boton-contacto:hover,
+.boton-contacto:focus-visible {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.footer-contacto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.footer-contacto a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  opacity: .85;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.footer-contacto a:hover {
+  opacity: 1;
+}
+
+/* En teléfonos el encabezado no tiene espacio para los íconos: ahí el
+   contacto queda en el pie de página, con el correo escrito completo. */
+@media (max-width: 560px) {
+  .contacto {
+    display: none;
+  }
 }
