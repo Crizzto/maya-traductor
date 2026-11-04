@@ -148,19 +148,33 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   // traducción y se vuelve a abrir al terminar (lo que se oye durante la
   // lectura ya se ignoraba por el eco, así que no se pierde nada).
   const microfonoSueltoRef = useRef(false);
+  const motorRef = useRef<'azure' | 'navegador' | null>(null);
+  const tokenVozRef = useRef<{ token: string; region: string; pedido: number } | null>(null);
 
   function soltarMicrofono() {
-    if (!ES_IOS || !reconocimientoRef.current || microfonoSueltoRef.current) return false;
-    microfonoSueltoRef.current = true;
-    try { reconocimientoRef.current.abort(); } catch { /* ya estaba detenido */ }
-    return true;
+    if (!ES_IOS || microfonoSueltoRef.current) return false;
+    if (motorRef.current === 'navegador' && reconocimientoRef.current) {
+      microfonoSueltoRef.current = true;
+      try { reconocimientoRef.current.abort(); } catch { /* ya estaba detenido */ }
+      return true;
+    }
+    if (motorRef.current === 'azure' && azureVozRef.current) {
+      microfonoSueltoRef.current = true;
+      cerrarAzureSpeech(); // cerrar el reconocedor es lo que libera el micrófono en iOS
+      return true;
+    }
+    return false;
   }
 
   function retomarMicrofono() {
     if (!microfonoSueltoRef.current) return;
     microfonoSueltoRef.current = false;
-    if (!escuchandoRef.current || !reconocimientoRef.current) return;
-    try { reconocimientoRef.current.start(); } catch (e) { console.warn('[Modo conferencia] No se pudo retomar el micrófono:', e); }
+    if (!escuchandoRef.current) return;
+    if (motorRef.current === 'azure') {
+      void iniciarAzureSpeech();
+      return;
+    }
+    try { reconocimientoRef.current?.start(); } catch (e) { console.warn('[Modo conferencia] No se pudo retomar el micrófono:', e); }
   }
 
   function leerEnVozAlta(texto: string) {
@@ -254,7 +268,12 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   }
 
   async function pedirTokenVoz(): Promise<{ token: string; region: string }> {
-    return getJSON('/api/voz/token', 'No se pudo obtener el token de voz.');
+    // El permiso dura 10 minutos; se reutiliza 8 para no pedir uno por frase.
+    const guardado = tokenVozRef.current;
+    if (guardado && Date.now() - guardado.pedido < 8 * 60 * 1000) return guardado;
+    const nuevo = await getJSON<{ token: string; region: string }>('/api/voz/token', 'No se pudo obtener el token de voz.');
+    tokenVozRef.current = { ...nuevo, pedido: Date.now() };
+    return nuevo;
   }
 
   async function iniciarAzureSpeech(): Promise<boolean> {
@@ -325,6 +344,7 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
       }, 9 * 60 * 1000);
 
       azureVozRef.current = { reconocedor, renovar };
+      motorRef.current = 'azure';
       setMotorVoz('azure');
       await new Promise<void>((resolver, rechazar) => reconocedor.startContinuousRecognitionAsync(resolver, rechazar));
       console.log('[Modo conferencia · Azure] Reconocimiento continuo en marcha.');
@@ -355,6 +375,17 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
     } catch { /* ya estaba cerrado */ }
   }
 
+  async function pasarAAzure(motivo: string) {
+    console.warn('[Modo conferencia] El reconocedor de Safari no está disponible (' + motivo + '); se usa Azure Speech.');
+    const nativo = reconocimientoRef.current;
+    reconocimientoRef.current = null; // para que onend no lo reinicie
+    try { nativo?.abort(); } catch { /* ya estaba detenido */ }
+    if (!escuchandoRef.current) return;
+    if (await iniciarAzureSpeech()) return;
+    setNotice(t('No se pudo activar el reconocimiento de voz. En iPhone, activa el Dictado en Ajustes > General > Teclado y vuelve a intentar.'));
+    detenerModoConferencia();
+  }
+
   function iniciarReconocedorNavegador() {
     const Reconocedor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!Reconocedor) {
@@ -362,6 +393,7 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
       detenerModoConferencia();
       return;
     }
+    motorRef.current = 'navegador';
     setMotorVoz('navegador');
     if (!audioRef.current) iniciarMedidorDeVolumen();
 
@@ -435,9 +467,17 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
       }
     };
     reconocimiento.onerror = (evento: any) => {
+      // "aborted" lo provoca la propia app al soltar el micrófono en iPhone: no es un error.
+      if (evento.error === 'aborted' && microfonoSueltoRef.current) return;
       console.error('[Modo conferencia] Error de reconocimiento:', evento.error, evento.message);
       marcar({ error: evento.error });
       if (evento.error === 'no-speech') return; // benigno: solo hubo silencio, se reintenta solo
+      // En iPhone, "service-not-allowed" casi siempre significa que el Dictado
+      // de Siri está desactivado: se pasa a Azure Speech en lugar de rendirse.
+      if (ES_IOS && ['service-not-allowed', 'network', 'language-not-supported'].includes(evento.error)) {
+        pasarAAzure(evento.error);
+        return;
+      }
       if (evento.error === 'not-allowed' || evento.error === 'service-not-allowed') {
         setNotice(t('Permiso de micrófono denegado. Revisa los permisos del sitio en tu navegador y vuelve a intentar.'));
         detenerModoConferencia();
@@ -455,7 +495,7 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
       console.log('[Modo conferencia] onend: se cortó la sesión de reconocimiento.');
       // El reconocimiento se corta solo tras una pausa; si seguimos en
       // modo conferencia, lo reinicia automáticamente.
-      if (escuchandoRef.current && !microfonoSueltoRef.current) {
+      if (escuchandoRef.current && !microfonoSueltoRef.current && reconocimientoRef.current === reconocimiento) {
         setDiagnostico((previo) => ({ ...previo, reinicios: previo.reinicios + 1 }));
         try { reconocimiento.start(); } catch (e) { console.error('[Modo conferencia] No se pudo reiniciar:', e); }
       }
@@ -512,6 +552,7 @@ export function ModoConferencia({ onNotice: setNotice }: { onNotice: (mensaje: s
   function detenerModoConferencia() {
     callar();
     microfonoSueltoRef.current = false;
+    motorRef.current = null;
     window.clearTimeout(cierrePorPausaRef.current);
     lecturasPendientesRef.current = 0;
     setHablando(false);

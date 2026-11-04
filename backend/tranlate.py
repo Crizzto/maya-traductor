@@ -21,7 +21,7 @@ from pathlib import Path
 
 import requests
 from asgiref.wsgi import WsgiToAsgi
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +31,7 @@ import proteccion
 from agente import GEMINI_LIMITE_DIARIO, MAX_MENSAJE_AGENTE, limpiar_historial, preguntar_al_agente
 from diccionarios import normalizar
 from motor import AZURE_LIMITE_MENSUAL, azure_detectar_idioma, traducir_con_fuente
-from voz import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, _emitir_token_voz
+from voz import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, MAX_TEXTO_TTS, LimiteVozAlcanzado, _emitir_token_voz, sintetizar_voz
 
 app = Flask(__name__)
 logger = logging.getLogger("tranlate")
@@ -211,6 +211,33 @@ async def api_agente():
         return jsonify(error="El agente no pudo responder en este momento."), 500
 
     return jsonify(respuesta=respuesta)
+
+
+@app.route("/api/voz/hablar", methods=["POST"])
+async def api_voz_hablar():
+    """
+    Devuelve el audio (MP3) de un texto, para leer traducciones en voz alta
+    donde la voz del navegador no funciona bien (iPhone). Espera { "texto" }.
+    Si Azure no está configurado o se alcanzó el tope, responde 503 y la
+    página usa la voz del navegador.
+    """
+    datos = request.get_json(silent=True) or {}
+    texto = (datos.get("texto") or "").strip()
+    if not texto:
+        return jsonify(error="No hay texto para leer."), 400
+    if len(texto) > MAX_TEXTO_TTS:
+        return jsonify(error=f"El texto es demasiado largo para leerlo (máximo {MAX_TEXTO_TTS} caracteres)."), 400
+    if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+        return jsonify(error="La voz de Azure no está configurada."), 503
+    try:
+        audio = await asyncio.to_thread(sintetizar_voz, texto)
+    except LimiteVozAlcanzado as e:
+        logger.warning("[VOZ] %s", e)
+        return jsonify(error="Se alcanzó el tope mensual de voz."), 503
+    except Exception as e:
+        logger.error("[VOZ] No se pudo generar el audio: %s", e)
+        return jsonify(error="No se pudo generar el audio."), 502
+    return Response(audio, mimetype="audio/mpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.route("/api/voz/token", methods=["GET"])

@@ -1221,3 +1221,32 @@ body {
     height: 28px;
   }
 }
+
+/* Logo pequeño (venado). Es más alto que ancho: se fija la altura. */
+.brand-venado {
+  width: auto;
+  object-fit: contain;
+}
+
+.brand-symbol.brand-venado {
+  height: 46px;
+}
+
+.result-symbol.brand-venado {
+  height: 64px;
+  filter: grayscale(1);
+}
+
+/* En modo oscuro, las astas cafés se perderían sobre el fondo: lleva un fondo crema. */
+.dark .brand-symbol.brand-venado {
+  background: #F8F4EA;
+  border-radius: 10px;
+  padding: 3px 6px;
+  box-sizing: content-box;
+  height: 40px;
+}
+
+@media (max-width: 700px) {
+  .brand-symbol.brand-venado { height: 38px; }
+  .dark .brand-symbol.brand-venado { height: 30px; padding: 2px 4px; border-radius: 8px; }
+}

@@ -25,8 +25,9 @@ export const Route = createFileRoute('/')({
   component: Index,
 });
 
+// Logo pequeño: el venado de Zacilingua (public/logo-venado.png).
 function BrandMark({ className = '' }: { className?: string }) {
-  return <svg className={className} viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 3 31 10 38 10 38 17 45 24 38 31 38 38 31 38 24 45 17 38 10 38 10 31 3 24 10 17 10 10 17 10Z" stroke="currentColor" strokeWidth="2" /><path d="m24 13 11 11-11 11-11-11Z" stroke="currentColor" strokeWidth="2" /><path d="M24 19v10M19 24h10" stroke="currentColor" strokeWidth="2" /></svg>;
+  return <img src="/logo-venado.png" alt="" aria-hidden="true" className={`brand-venado ${className}`} width={107} height={160} />;
 }
 
 const phrases = [
