@@ -31,21 +31,24 @@ GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # octubre de 2026). Por eso el modelo se puede cambiar con la variable de
 # entorno GEMINI_MODELO, y si el configurado ya no existe, el backend
 # busca solo un modelo Flash disponible para tu clave.
-# Modelo principal fijo y uno de respaldo. Se evita "gemini-flash-latest"
-# porque apunta siempre al Flash más nuevo, que es el más saturado. Si el
-# principal está saturado o tarda, se salta DE INMEDIATO al respaldo
-# (Flash-Lite: más rápido y con mucha menos demanda), sin esperas.
+# Modelo principal y de respaldo.
+#  - Principal: Gemini 3.5 Flash-Lite (estable desde julio de 2026). Es el
+#    más rápido (unos 2 s por respuesta) y barato, y soporta herramientas.
+#    Los Flash completos "piensan" antes de responder y llegaban a tardar
+#    12 a 25 s por vuelta, lo que agotaba el tiempo de la pregunta.
+#  - Respaldo: Gemini 3.6 Flash, más capaz; solo entra si el principal se
+#    satura, se queda sin cupo o tarda demasiado.
 # Ambos se pueden cambiar con variables de entorno.
-GEMINI_MODELO_PRINCIPAL = os.environ.get("GEMINI_MODELO", "gemini-3.6-flash")
-GEMINI_MODELO_RESPALDO = os.environ.get("GEMINI_MODELO_RESPALDO", "gemini-flash-lite-latest")
+GEMINI_MODELO_PRINCIPAL = os.environ.get("GEMINI_MODELO", "gemini-3.5-flash-lite")
+GEMINI_MODELO_RESPALDO = os.environ.get("GEMINI_MODELO_RESPALDO", "gemini-3.6-flash")
 _principal_actual = GEMINI_MODELO_PRINCIPAL   # cambia solo si Google retira el modelo
 _principal_en_pausa_hasta = 0.0               # tras una saturación, se usa el respaldo un rato
 _PAUSA_PRINCIPAL = 120                        # segundos
 _modelos_sin_thinking: set[str] = set()       # modelos que no aceptan thinkingLevel
 # Segundos máximos por llamada a Gemini y por pregunta completa (una
 # pregunta puede requerir varias llamadas si usa herramientas).
-GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "25"))
-GEMINI_TIEMPO_MAXIMO = int(os.environ.get("GEMINI_TIEMPO_MAXIMO", "50"))
+GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "15"))
+GEMINI_TIEMPO_MAXIMO = int(os.environ.get("GEMINI_TIEMPO_MAXIMO", "60"))
 
 INSTRUCCION_AGENTE = (
     "Eres un asistente bilingüe que ayuda a la gente a entender y usar el "
@@ -194,8 +197,9 @@ def _gemini_llamar(contenidos: list, limite: float) -> dict:
                 "contents": contenidos,
                 "tools": [HERRAMIENTA_TRADUCIR],
             }
-            # Pensamiento bajo: para explicar una traducción no hace falta
-            # que el modelo razone mucho, y así responde bastante más rápido.
+            # Razonamiento bajo: rápido, pero suficiente para que el modelo no
+            # corte las llamadas a herramientas antes de tiempo (Google no
+            # recomienda "minimal" para agentes con herramientas).
             if modelo not in _modelos_sin_thinking:
                 cuerpo["generationConfig"] = {"thinkingConfig": {"thinkingLevel": "low"}}
 
